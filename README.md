@@ -66,13 +66,16 @@
 
 ## 二、 多国口音与角色矩阵
 
-| 口音/国家 | 角色名称 | 角色背景 | ElevenLabs 预设 Voice | OpenAI TTS 映射 | Edge-TTS 映射 | 教学意义 |
+| 口音/国家 | 角色名称 | 角色背景 | ElevenLabs 预设 Voice | OpenAI TTS 映射 | Edge-TTS 映射 | 教学与口语特征 |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **🇺🇸 美国 (US)** | **Rachel Vance** | 纽约曼哈顿科技白领 | `21m00Tcm4TlvDq8ikWAM` | `alloy` | `en-US-JennyNeural` | 美语连读、弱读与现代职场/生活日常口语 |
 | **🇬🇧 英国 (UK)** | **Arthur Pendelton** | 伦敦/牛津文学文化学者 | `JBFqnCBsd6RMkjVDRZzb` | `fable` | `en-GB-RyanNeural` | 纯正英音 RP 发音、雅思口语与严谨表达 |
 | **🇦🇺 澳大利亚 (AU)** | **Liam O'Connor** | 悉尼冲浪与旅行博主 | `VR6AewLTigWG4xSOukaG` | `echo` | `en-AU-WilliamNeural` | 澳洲英语升调、特有俚语与英联邦口音适应 |
 | **🇮🇳 印度 (IN)** | **Priya Sharma** | 班加罗尔首席软件架构师 | `EXAVITQu4vr4xnSDxMaL` | `shimmer` | `en-IN-NeerjaNeural` | 突破跨国远程工作中全球最普遍但最难辨析的口音 |
 | **🇨🇦 加拿大 (CA)** | **Chloe Tremblay** | 温哥华环保学者与户外向导 | `AZnzlk1XvdvUeBnXmlld` | `nova` | `en-CA-ClaraNeural` | 纯净清晰发音，适合初学者过渡练习 |
+| **🇷🇴 罗马尼亚 (RO)** | **Elena Radu** | 布加勒斯特数字技术架构师 | `EXAVITQu4vr4xnSDxMaL` | `shimmer` | `en-US-JennyNeural` | 东欧罗曼语族口音（清晰卷舌、精炼重音），适合跨国欧企交流 |
+| **🇺🇦 乌克兰 (UA)** | **Oksana Kovalenko** | 基辅跨境远程工程师 | `AZnzlk1XvdvUeBnXmlld` | `nova` | `en-GB-RyanNeural` | 斯拉夫语族英语发音风格（辅音硬朗），适应全球分布式开发团队 |
+| **🇨🇳 中英双语 (CN)** | **Lin Wei (林薇)** | 上海资深口语伴学导师 | `21m00Tcm4TlvDq8ikWAM` | `alloy` | `zh-CN-XiaoxiaoNeural` | 中英双语流畅切换、中文解析知识点与语法，零压力过渡练习 |
 
 ---
 
@@ -129,8 +132,17 @@ dotnet run --project src/LiveConversation.Web
 
 ---
 
-## 四、 现代交互操作方式
+## 四、 现代交互与定制化特性
 
+* **多主题换肤 (Theme Switching)**：导航栏提供 4 套高对比度舒适配色，一键即时切换并自动持久化：
+  * 🌌 **深邃星空 (Cosmic Dark)**（默认沉浸暗黑）
+  * 🌲 **赛博翡翠 (Cyber Emerald)**（现代科技极客绿）
+  * 🌆 **极夜紫晶 (Midnight Purple)**（高雅午夜紫）
+  * ☀️ **极简纯白 (Modern Light)**（清新明亮日间模式）
+* **中英文双语界面 (Bilingual UI)**：点击顶部 `🇨🇳 中文 / 🇺🇸 English` 按钮实现全界面毫秒级无损多语言切换。
+* **中文语音输入 (STT) 与中文语音合成 (TTS)**：
+  * **中文 STT 识别**：顶部配备拾音语种下拉框（`Auto 自动匹配` / `en-US 纯英` / `zh-CN 中文普通话`），支持直接用中文与发音人交流或寻求翻译帮助。
+  * **中文 TTS 朗读**：选用 🇨🇳 **Lin Wei (林薇)** 或切换语种时，AI 能以纯正母语标准普通话进行中英混说教学，深度剖析语法要点与词根起源。
 * **双手自由对讲 (Hands-Free)**：点击麦克风开启，系统自动监听说话；检测到说话停顿约 900ms 时自动提交，真人语音回复完毕后自动恢复监听。
 * **按键对讲模式 (Push-to-Talk)**：长按空格键或按住麦克风说话，松开即刻发送。
 * **随时打断 (Barge-in)**：在对方说话时按下空格键或点击 **🛑 Interrupt** 按钮，立即打断并停止对方发音。
@@ -141,20 +153,20 @@ dotnet run --project src/LiveConversation.Web
 
 ## 五、 测试工程与测试闭环 (Unit & Integration Tests)
 
-系统包含专门的测试工程 [`tests/LiveConversation.Tests`](file:///e:/Personal/LiveConversation/tests/LiveConversation.Tests)，覆盖单元测试与集成测试：
+系统包含专门的测试工程 [`tests/LiveConversation.Tests`](file:///e:/Personal/LiveConversation/tests/LiveConversation.Tests)，形成完整的自动化回归验证闭环：
 
 ```bash
-# 运行全部 34 项测试
+# 运行全部 37 项单元与集成测试
 dotnet test
 ```
 
 ### 测试矩阵说明
 1. **单元测试 (Unit Tests)**：
    * `SentenceSegmenterTests`：验证流式输出断句的准确性，包含缩写词（如 `Dr.`、`U.S.`）、小数点、省略号及末尾 Flush 缓冲保护。
-   * `PersonaRegistryTests`：验证 5 国口音角色（美、英、澳、印、加）与 5 大情景模式配置的完整性及双引擎 Voice 映射。
+   * `PersonaRegistryTests`：验证 8 国口音角色（美、英、澳、印、加、罗、乌、中）与 5 大情景模式配置的完整性及双引擎 Voice 映射。
    * `TtsProviderFactoryTests`：验证动态工厂对大小写不敏感匹配、引擎热切换及向后兼容平替降级机制。
 2. **集成测试 (Integration Tests)**：
-   * `ApiEndpointsTests`：基于 `WebApplicationFactory<Program>` 启动真实内存 Web 服务器，验证 `/api/personas`、`/api/scenarios`、`/api/config` 及 `/index.html` 静态页面可访问性。
+   * `ApiEndpointsTests`：基于 `WebApplicationFactory<Program>` 启动真实内存 Web 服务器，验证 `/api/personas`（含新角色）、`/api/scenarios`、`/api/config` 及 `/index.html` 静态页面可访问性。
    * `TtsEngineIntegrationTests`：验证 ASP.NET Core 10 依赖注入容器是否正确装配所有 TTS 实现类（`ElevenLabsTtsProvider`、`EdgeTtsProvider`、`OpenAiTtsProvider`）与工厂类，并对缺失 Key 的安全防御性报错进行了断言验证。
 
 ---

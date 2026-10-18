@@ -1,0 +1,22 @@
+# Build output
+bin/
+obj/
+publish/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+
+# Test/scratch artifacts
+*.log
+logs/
+headers.txt
+sid.txt
+*.fsx
+
+# Appsettings that carry credentials — never commit them.
+**/appsettings.Development.json
+**/appsettings.hopcos.json
