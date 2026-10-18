@@ -44,9 +44,11 @@ public class ElevenLabsTtsProvider : ITtsProvider
             ? profile.VoiceId 
             : "21m00Tcm4TlvDq8ikWAM"; // Default Rachel
 
-        var modelId = !string.IsNullOrWhiteSpace(_appSettings.ElevenLabs.ModelId)
-            ? _appSettings.ElevenLabs.ModelId
-            : "eleven_turbo_v2_5";
+        var modelId = !string.IsNullOrWhiteSpace(profile.ModelId)
+            ? profile.ModelId
+            : (!string.IsNullOrWhiteSpace(_appSettings.ElevenLabs.ModelId)
+                ? _appSettings.ElevenLabs.ModelId
+                : "eleven_multilingual_v2");
 
         var url = $"https://api.elevenlabs.io/v1/text-to-speech/{voiceId}?output_format=mp3_44100_128";
 
@@ -54,15 +56,17 @@ public class ElevenLabsTtsProvider : ITtsProvider
         request.Headers.Add("xi-api-key", apiKey);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("audio/mpeg"));
 
+        // style: 0.45 activates the expressive accent and cadence of the specific voice actor.
+        // stability: 0.35 allows natural regional pitch contour and inflections.
         var payload = new
         {
             text = text,
             model_id = modelId,
             voice_settings = new
             {
-                stability = 0.5,
-                similarity_boost = 0.75,
-                style = 0.0,
+                stability = 0.35,
+                similarity_boost = 0.80,
+                style = 0.45,
                 use_speaker_boost = true
             }
         };

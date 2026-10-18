@@ -6,5 +6,6 @@ public record VoiceProfile(
     string VoiceId,
     string ProviderName,
     float Rate = 1.0f,
-    float Pitch = 1.0f
+    float Pitch = 1.0f,
+    string? ModelId = null
 );

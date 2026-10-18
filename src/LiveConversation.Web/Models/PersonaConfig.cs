@@ -13,6 +13,7 @@ public class PersonaConfig
     public required string EdgeTtsVoiceName { get; set; }
     public required string SystemPrompt { get; set; }
     public string[] SuggestedTopics { get; set; } = [];
+    public string? InitialGreeting { get; set; }
 }
 
 public class ScenarioConfig

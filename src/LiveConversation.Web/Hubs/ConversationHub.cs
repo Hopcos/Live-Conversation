@@ -6,6 +6,7 @@ using LiveConversation.Web.Services.Abstractions;
 using LiveConversation.Web.Services.Personas;
 using LiveConversation.Web.Services.Tts;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Options;
 
 namespace LiveConversation.Web.Hubs;
 
@@ -14,6 +15,8 @@ public class ConversationHub : Hub
     private readonly ILlmService _llmService;
     private readonly ICoachService _coachService;
     private readonly TtsProviderFactory _ttsFactory;
+    private readonly AppSettings _appSettings;
+    private readonly IHubContext<ConversationHub> _hubContext;
     private readonly ILogger<ConversationHub> _logger;
 
     // In-memory conversation state per connection
@@ -24,11 +27,15 @@ public class ConversationHub : Hub
         ILlmService llmService,
         ICoachService coachService,
         TtsProviderFactory ttsFactory,
+        IOptions<AppSettings> appSettings,
+        IHubContext<ConversationHub> hubContext,
         ILogger<ConversationHub> logger)
     {
         _llmService = llmService;
         _coachService = coachService;
         _ttsFactory = ttsFactory;
+        _appSettings = appSettings.Value;
+        _hubContext = hubContext;
         _logger = logger;
     }
 
@@ -62,8 +69,8 @@ public class ConversationHub : Hub
             ActiveTtsProvider = settings?.TtsProvider ?? "EdgeTTS"
         });
 
-        // Synthesize initial greeting
-        var greeting = scenario.InitialGreeting;
+        // Synthesize initial greeting with persona's regional spoken flavor
+        var greeting = persona.InitialGreeting ?? scenario.InitialGreeting;
         history.Add(new SimpleChatMessage("assistant", greeting));
 
         await Clients.Caller.SendAsync("ReceiveTextChunk", greeting);
@@ -74,10 +81,38 @@ public class ConversationHub : Hub
             {
                 var ttsProvider = _ttsFactory.GetProvider(settings?.TtsProvider);
                 var voiceProfile = GetVoiceProfile(persona, ttsProvider.ProviderName, settings);
-                var audioBytes = await ttsProvider.SynthesizeAsync(greeting, voiceProfile, settings?.ElevenLabsApiKey);
-                var base64 = Convert.ToBase64String(audioBytes);
+                byte[] audioBytes = [];
+                var isWebSpeech = settings?.TtsProvider?.Equals("WebSpeech", StringComparison.OrdinalIgnoreCase) == true;
 
-                await Clients.Client(connectionId).SendAsync("ReceiveSentenceAudio", new AudioSentencePayload(
+                if (!isWebSpeech)
+                {
+                    try
+                    {
+                        var key = ttsProvider.ProviderName.Equals("OpenAITTS", StringComparison.OrdinalIgnoreCase)
+                            ? settings?.LlmApiKey
+                            : settings?.ElevenLabsApiKey;
+                        audioBytes = await ttsProvider.SynthesizeAsync(greeting, voiceProfile, key);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Primary TTS failed for greeting. Falling back to EdgeTTS.");
+                        try
+                        {
+                            var fallbackProvider = _ttsFactory.GetProvider("EdgeTTS");
+                            var fallbackProfile = voiceProfile with { ProviderName = "EdgeTTS", VoiceId = persona.EdgeTtsVoiceName };
+                            audioBytes = await fallbackProvider.SynthesizeAsync(greeting, fallbackProfile, null);
+                        }
+                        catch (Exception fallbackEx)
+                        {
+                            _logger.LogWarning(fallbackEx, "Fallback EdgeTTS also failed. Emitting empty audio for browser WebSpeech fallback.");
+                            audioBytes = [];
+                        }
+                    }
+                }
+
+                var base64 = audioBytes.Length > 0 ? Convert.ToBase64String(audioBytes) : string.Empty;
+
+                await _hubContext.Clients.Client(connectionId).SendAsync("ReceiveSentenceAudio", new AudioSentencePayload(
                     SentenceIndex: 0,
                     Text: greeting,
                     AudioBase64: base64,
@@ -90,7 +125,7 @@ public class ConversationHub : Hub
             }
             finally
             {
-                await Clients.Client(connectionId).SendAsync("AiTurnCompleted");
+                await _hubContext.Clients.Client(connectionId).SendAsync("AiTurnCompleted");
             }
         });
     }
@@ -121,16 +156,16 @@ public class ConversationHub : Hub
         // Add user turn to conversation history
         history.Add(new SimpleChatMessage("user", userText));
 
-        // 1. Kick off asynchronous background coaching analysis (Shadow Coach)
+        // 1. Kick off asynchronous background coaching analysis (Shadow Coach) using isolated context snapshot
+        var contextSummary = string.Join(" | ", history.TakeLast(3).Select(m => $"{m.Role}: {m.Content}"));
         _ = Task.Run(async () =>
         {
             try
             {
-                var contextSummary = string.Join(" | ", history.TakeLast(3).Select(m => $"{m.Role}: {m.Content}"));
                 var feedback = await _coachService.AnalyzeSpeechAsync(userText, contextSummary, settings);
                 if (feedback != null)
                 {
-                    await Clients.Client(connectionId).SendAsync("ReceiveCoachFeedback", feedback);
+                    await _hubContext.Clients.Client(connectionId).SendAsync("ReceiveCoachFeedback", feedback);
                 }
             }
             catch (Exception ex)
@@ -145,8 +180,13 @@ public class ConversationHub : Hub
             var systemPrompt = $"""
                 {persona.SystemPrompt}
                 Scenario: {scenario.ContextPrompt}
-                Remember: Keep your response natural, conversational, and within 1-3 spoken sentences. 
-                Do NOT output markdown, bullet points, emoji, or parenthetical cues.
+                
+                ORAL CONVERSATION & ACCENT GUIDELINES:
+                - Embody your persona's spoken dialect and regional oral accent habits ({persona.AccentDescription}) authentically.
+                - You MUST naturally incorporate your persona's distinct regional oral vocabulary, idioms, contractions, and spoken pacing in EVERY turn.
+                - Keep your turns strictly within 1 to 3 spoken sentences so the learner has ample opportunity to practice.
+                - End with a friendly, natural follow-up question.
+                - NEVER output markdown formatting (like asterisks, bolding, bullet points), emojis, or parenthetical cues. Output ONLY direct spoken words.
                 """;
 
             var segmenter = new SentenceSegmenter();
@@ -169,7 +209,7 @@ public class ConversationHub : Hub
                     if (ct.IsCancellationRequested) break;
 
                     var currentIndex = sentenceIndex++;
-                    await SynthesizeAndSendSentenceAsync(connectionId, ttsProvider, sentence, currentIndex, voiceProfile, settings, false, ct);
+                    await SynthesizeAndSendSentenceAsync(connectionId, ttsProvider, sentence, currentIndex, voiceProfile, persona, settings, false, ct);
                 }
             }
 
@@ -177,7 +217,7 @@ public class ConversationHub : Hub
             if (!ct.IsCancellationRequested && segmenter.Flush() is { } remainingSentence)
             {
                 var currentIndex = sentenceIndex++;
-                await SynthesizeAndSendSentenceAsync(connectionId, ttsProvider, remainingSentence, currentIndex, voiceProfile, settings, true, ct);
+                await SynthesizeAndSendSentenceAsync(connectionId, ttsProvider, remainingSentence, currentIndex, voiceProfile, persona, settings, true, ct);
             }
 
             if (!ct.IsCancellationRequested)
@@ -210,19 +250,29 @@ public class ConversationHub : Hub
     /// <summary>
     /// Test TTS synthesis for settings preview.
     /// </summary>
-    public async Task<string?> TestTts(string text, string engine, string voiceId, string? apiKey)
+    public async Task<string?> TestTts(string text, string engine, string voiceId, string? apiKey, string? modelId = null)
     {
         try
         {
+            if (string.Equals(engine, "WebSpeech", StringComparison.OrdinalIgnoreCase))
+            {
+                // WebSpeech is executed client-side in the browser
+                return string.Empty;
+            }
+
             var provider = _ttsFactory.GetProvider(engine);
-            var profile = new VoiceProfile("US", "Test", voiceId, engine);
-            var audioBytes = await provider.SynthesizeAsync(text, profile, apiKey);
+            var profile = new VoiceProfile("US", "Test", voiceId, engine, ModelId: modelId);
+            var effectiveKey = engine.Equals("OpenAITTS", StringComparison.OrdinalIgnoreCase)
+                ? (!string.IsNullOrWhiteSpace(apiKey) ? apiKey : _appSettings.Llm.ApiKey)
+                : apiKey;
+
+            var audioBytes = await provider.SynthesizeAsync(text, profile, effectiveKey);
             return Convert.ToBase64String(audioBytes);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Test TTS failed: {Message}", ex.Message);
-            throw new HubException($"TTS Error: {ex.Message}");
+            throw new HubException(ex.Message);
         }
     }
 
@@ -232,16 +282,45 @@ public class ConversationHub : Hub
         string sentence,
         int index,
         VoiceProfile profile,
+        PersonaConfig persona,
         ClientSettings? settings,
         bool isLast,
         CancellationToken ct)
     {
         try
         {
-            var audioBytes = await provider.SynthesizeAsync(sentence, profile, settings?.ElevenLabsApiKey, ct);
-            var base64 = Convert.ToBase64String(audioBytes);
+            byte[] audioBytes = [];
+            var isWebSpeech = settings?.TtsProvider?.Equals("WebSpeech", StringComparison.OrdinalIgnoreCase) == true;
 
-            await Clients.Client(connectionId).SendAsync("ReceiveSentenceAudio", new AudioSentencePayload(
+            if (!isWebSpeech)
+            {
+                try
+                {
+                    var apiKey = provider.ProviderName.Equals("OpenAITTS", StringComparison.OrdinalIgnoreCase)
+                        ? settings?.LlmApiKey
+                        : settings?.ElevenLabsApiKey;
+                    audioBytes = await provider.SynthesizeAsync(sentence, profile, apiKey, ct);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Primary TTS synthesis failed for '{Sentence}'. Falling back to EdgeTTS.", sentence);
+                    try
+                    {
+                        var fallbackProvider = _ttsFactory.GetProvider("EdgeTTS");
+                        var fallbackProfile = profile with { ProviderName = "EdgeTTS", VoiceId = persona.EdgeTtsVoiceName };
+                        audioBytes = await fallbackProvider.SynthesizeAsync(sentence, fallbackProfile, null, ct);
+                    }
+                    catch (Exception fallbackEx)
+                    {
+                        _logger.LogWarning(fallbackEx, "Fallback EdgeTTS failed as well. Emitting empty audio for browser WebSpeech fallback.");
+                        audioBytes = [];
+                    }
+                }
+            }
+
+            var base64 = audioBytes.Length > 0 ? Convert.ToBase64String(audioBytes) : string.Empty;
+
+            await _hubContext.Clients.Client(connectionId).SendAsync("ReceiveSentenceAudio", new AudioSentencePayload(
                 SentenceIndex: index,
                 Text: sentence,
                 AudioBase64: base64,
@@ -265,7 +344,8 @@ public class ConversationHub : Hub
             AccentName: persona.AccentDescription,
             VoiceId: voiceId,
             ProviderName: providerName,
-            Rate: rate
+            Rate: rate,
+            ModelId: isElevenLabs ? settings?.ElevenLabsModelId : null
         );
     }
 

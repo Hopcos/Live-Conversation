@@ -154,14 +154,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     connection.on('ReceiveSentenceAudio', (payload) => {
-        audioPlayer.enqueueSentence(payload.sentenceIndex, payload.text, payload.audioBase64, payload.isLast);
-        state.sentencesInTurn.push(payload);
+        const country = state.currentPersona?.countryCode || 'US';
+        audioPlayer.enqueueSentence(payload.sentenceIndex, payload.text, payload.audioBase64, payload.isLast, country);
+        ensureAssistantTurnElement();
+        if (state.activeAssistantTurnElement) {
+            if (!state.activeAssistantTurnElement._turnSentences) {
+                state.activeAssistantTurnElement._turnSentences = [];
+            }
+            state.activeAssistantTurnElement._turnSentences.push(payload);
+        }
     });
 
     connection.on('AiTurnCompleted', () => {
-        attachReplayButtonsToTurn(state.activeAssistantTurnElement, state.sentencesInTurn);
-        state.activeAssistantTurnElement = null;
-        state.sentencesInTurn = [];
+        if (state.activeAssistantTurnElement) {
+            attachReplayButtonsToTurn(state.activeAssistantTurnElement);
+            state.activeAssistantTurnElement = null;
+        }
     });
 
     connection.on('ReceiveCoachFeedback', (feedback) => {
@@ -171,16 +179,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     connection.on('ConversationInterrupted', () => {
         audioPlayer.stop();
         if (state.activeAssistantTurnElement) {
-            attachReplayButtonsToTurn(state.activeAssistantTurnElement, state.sentencesInTurn);
+            attachReplayButtonsToTurn(state.activeAssistantTurnElement);
             state.activeAssistantTurnElement = null;
-            state.sentencesInTurn = [];
         }
         showNotification('Partner interrupted', 'info');
     });
 
     connection.on('ReceiveError', (errorMsg) => {
         state.activeAssistantTurnElement = null;
-        state.sentencesInTurn = [];
         showNotification(errorMsg, 'error');
     });
 
@@ -231,14 +237,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     function renderUserBubble(text) {
         // Finalize previous assistant turn (e.g. welcome message) so next AI response creates a brand new bubble after this user bubble
         if (state.activeAssistantTurnElement) {
-            attachReplayButtonsToTurn(state.activeAssistantTurnElement, state.sentencesInTurn);
+            attachReplayButtonsToTurn(state.activeAssistantTurnElement);
             state.activeAssistantTurnElement = null;
-            state.sentencesInTurn = [];
         }
 
         const stream = document.getElementById('dialogue-stream');
         const bubble = document.createElement('div');
         bubble.className = 'flex justify-end mb-4 animate-fade-in';
+        bubble._userText = text;
+        bubble._hasCoachAttached = false;
         bubble.innerHTML = `
             <div class="max-w-[80%] bg-indigo-600 text-white rounded-2xl rounded-tr-sm px-4 py-3 shadow-md">
                 <div class="flex items-center space-x-2 mb-1 text-xs text-indigo-200">
@@ -259,6 +266,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const stream = document.getElementById('dialogue-stream');
         const bubble = document.createElement('div');
         bubble.className = 'flex justify-start mb-4 animate-fade-in';
+        bubble._turnSentences = [];
         bubble.innerHTML = `
             <div class="max-w-[85%] bg-slate-800 border border-slate-700 text-slate-100 rounded-2xl rounded-tl-sm px-4 py-3 shadow-md">
                 <div class="flex items-center justify-between mb-1.5 text-xs text-slate-400">
@@ -281,17 +289,33 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Can optionally highlight specific sentence if needed
     }
 
-    function attachReplayButtonsToTurn(turnElement, sentences) {
-        if (!turnElement || !sentences || sentences.length === 0) return;
+    function attachReplayButtonsToTurn(turnElement) {
+        if (!turnElement) return;
         const replayBar = turnElement.querySelector('.sentence-replay-bar');
-        if (!replayBar) return;
+        if (!replayBar || replayBar.querySelector('button')) return;
+
+        const turnSentences = turnElement._turnSentences && turnElement._turnSentences.length > 0
+            ? [...turnElement._turnSentences]
+            : [];
+
+        if (turnSentences.length === 0) return;
 
         const replayBtn = document.createElement('button');
         replayBtn.className = 'px-2 py-0.5 text-xs rounded bg-slate-700 hover:bg-slate-600 text-slate-300 flex items-center space-x-1 transition';
         replayBtn.innerHTML = `<span>${i18n.t('replay_btn')}</span>`;
         replayBtn.onclick = async () => {
-            for (const s of sentences) {
-                await audioPlayer.replayAudioBase64(s.audioBase64, 0.8);
+            replayBtn.disabled = true;
+            replayBtn.classList.add('opacity-75');
+            const originalHtml = replayBtn.innerHTML;
+            replayBtn.innerHTML = `<span>⏳ ...</span>`;
+
+            try {
+                const country = state.currentPersona?.countryCode || 'US';
+                await audioPlayer.replaySentenceList(turnSentences, 0.8, country);
+            } finally {
+                replayBtn.disabled = false;
+                replayBtn.classList.remove('opacity-75');
+                replayBtn.innerHTML = originalHtml;
             }
         };
         replayBar.appendChild(replayBtn);
@@ -336,12 +360,54 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         container.prepend(card);
 
-        // Update badge count
+        // Update badge count and highlight tab
         const badgeElem = document.getElementById('coach-tab-badge');
         if (badgeElem) {
             state.coachingCards.push(feedback);
             badgeElem.textContent = state.coachingCards.length;
             badgeElem.classList.remove('hidden');
+            if (feedback.hasIssues) {
+                badgeElem.className = 'px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-mono animate-bounce';
+            }
+        }
+
+        // Attach inline hint to the user's bubble in the live dialogue stream
+        const userBubbles = document.querySelectorAll('#dialogue-stream > div.justify-end');
+        for (let i = userBubbles.length - 1; i >= 0; i--) {
+            const b = userBubbles[i];
+            if (b._userText === feedback.originalText || !b._hasCoachAttached) {
+                b._hasCoachAttached = true;
+                const innerBox = b.querySelector('.bg-indigo-600');
+                if (innerBox && !innerBox.querySelector('.coach-hint-box')) {
+                    const hintDiv = document.createElement('div');
+                    hintDiv.className = 'coach-hint-box mt-2 pt-2 border-t border-indigo-400/40 flex flex-col space-y-1 text-xs cursor-pointer hover:bg-indigo-700/60 p-1.5 rounded-lg transition';
+                    if (feedback.hasIssues) {
+                        hintDiv.innerHTML = `
+                            <div class="flex items-center space-x-1.5 text-amber-200 font-medium">
+                                <span>💡 纠偏建议:</span>
+                                <span class="underline decoration-amber-400">${escapeHtml(feedback.correctedText || '')}</span>
+                            </div>
+                            <div class="text-[11px] text-indigo-200">👉 点击切换到右侧【AI 影子伴学】查看深度解析</div>
+                        `;
+                    } else {
+                        hintDiv.innerHTML = `
+                            <div class="flex items-center space-x-1.5 text-emerald-200 text-[11px]">
+                                <span>✨</span>
+                                <span>表达规范地道！地道推荐: ${escapeHtml(feedback.nativeAlternative || '')}</span>
+                            </div>
+                        `;
+                    }
+                    hintDiv.onclick = () => {
+                        document.getElementById('tab-coach').click();
+                    };
+                    innerBox.appendChild(hintDiv);
+                }
+                break;
+            }
+        }
+
+        if (feedback.hasIssues) {
+            showNotification('💡 AI 影子伴学：检测到语法建议，已生成纠偏卡片！', 'warning');
         }
     }
 
@@ -379,8 +445,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         const badge = document.getElementById('active-tts-badge');
         if (!badge) return;
         if (provider === 'ElevenLabs') {
-            badge.textContent = 'ElevenLabs (Turbo v2.5)';
+            badge.textContent = 'ElevenLabs (Multilingual)';
             badge.className = 'text-xs px-2.5 py-1 rounded-full bg-pink-500/20 text-pink-300 border border-pink-500/30';
+        } else if (provider === 'WebSpeech') {
+            badge.textContent = 'WebSpeech (原生口音)';
+            badge.className = 'text-xs px-2.5 py-1 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30';
         } else if (provider === 'OpenAITTS') {
             badge.textContent = 'OpenAI TTS (tts-1)';
             badge.className = 'text-xs px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
@@ -583,16 +652,34 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Test TTS button in settings modal
     document.getElementById('test-tts-btn').addEventListener('click', async () => {
         const engine = document.getElementById('settings-tts-provider').value;
-        const elevenKey = document.getElementById('settings-elevenlabs-key').value;
-        const testText = "Hello! This is a test of your speech synthesis settings.";
+        const elevenKey = document.getElementById('settings-elevenlabs-key').value.trim();
+        const elevenModel = document.getElementById('settings-elevenlabs-model').value.trim();
+        const llmKey = document.getElementById('settings-llm-key').value.trim();
+        const country = state.currentPersona?.countryCode || 'US';
+        const rate = parseFloat(document.getElementById('settings-rate').value) || 1.0;
+        const testText = "Hello! This is a test of your speech synthesis and accent settings.";
 
-        const voiceId = engine === 'ElevenLabs' ? (state.currentPersona?.elevenLabsVoiceId || '21m00Tcm4TlvDq8ikWAM') : (state.currentPersona?.edgeTtsVoiceName || 'en-US-JennyNeural');
+        if (engine === 'WebSpeech') {
+            audioPlayer.speakWebSpeech(testText, country, rate);
+            showNotification(`🔊 正在试听【${state.currentPersona?.name || 'Partner'}】浏览器原生口音发音 (${country})...`, 'success');
+            return;
+        }
+
+        const voiceId = engine === 'ElevenLabs' 
+            ? (state.currentPersona?.elevenLabsVoiceId || '21m00Tcm4TlvDq8ikWAM') 
+            : (state.currentPersona?.edgeTtsVoiceName || 'en-US-JennyNeural');
+        const apiKey = engine === 'OpenAITTS' ? llmKey : (engine === 'ElevenLabs' ? elevenKey : null);
 
         try {
             document.getElementById('test-tts-btn').textContent = 'Testing...';
-            const base64 = await connection.invoke('TestTts', testText, engine, voiceId, elevenKey);
-            await audioPlayer.replayAudioBase64(base64, 1.0);
-            showNotification('TTS test played successfully!', 'success');
+            const base64 = await connection.invoke('TestTts', testText, engine, voiceId, apiKey, elevenModel);
+            if (base64) {
+                await audioPlayer.replayAudioBase64(base64, rate);
+                showNotification('TTS test played successfully!', 'success');
+            } else {
+                audioPlayer.speakWebSpeech(testText, country, rate);
+                showNotification('WebSpeech test played successfully!', 'success');
+            }
         } catch (e) {
             showNotification(`TTS test failed: ${e.message}`, 'error');
         } finally {
@@ -605,6 +692,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         return {
             ttsProvider: localStorage.getItem('live_conv_tts_provider') || '',
             elevenLabsApiKey: localStorage.getItem('live_conv_elevenlabs_key') || '',
+            elevenLabsModelId: localStorage.getItem('live_conv_elevenlabs_model') || '',
             llmApiKey: localStorage.getItem('live_conv_llm_key') || '',
             llmEndpoint: localStorage.getItem('live_conv_llm_endpoint') || '',
             llmModel: localStorage.getItem('live_conv_llm_model') || '',
@@ -619,6 +707,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const cfg = await res.json();
                 if (!state.settings.ttsProvider && cfg.ttsProvider) {
                     state.settings.ttsProvider = cfg.ttsProvider;
+                }
+                if (!state.settings.elevenLabsModelId && cfg.elevenLabsModel) {
+                    state.settings.elevenLabsModelId = cfg.elevenLabsModel;
                 }
                 if (!state.settings.llmEndpoint && cfg.llmEndpoint) {
                     state.settings.llmEndpoint = cfg.llmEndpoint;
@@ -636,6 +727,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     function populateSettingsForm() {
         document.getElementById('settings-tts-provider').value = state.settings.ttsProvider || 'ElevenLabs';
         document.getElementById('settings-elevenlabs-key').value = state.settings.elevenLabsApiKey;
+        document.getElementById('settings-elevenlabs-model').value = state.settings.elevenLabsModelId || '';
         document.getElementById('settings-llm-key').value = state.settings.llmApiKey;
         document.getElementById('settings-llm-endpoint').value = state.settings.llmEndpoint;
         document.getElementById('settings-llm-model').value = state.settings.llmModel;
@@ -646,6 +738,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     function saveSettingsFromForm() {
         state.settings.ttsProvider = document.getElementById('settings-tts-provider').value;
         state.settings.elevenLabsApiKey = document.getElementById('settings-elevenlabs-key').value.trim();
+        state.settings.elevenLabsModelId = document.getElementById('settings-elevenlabs-model').value.trim();
         state.settings.llmApiKey = document.getElementById('settings-llm-key').value.trim();
         state.settings.llmEndpoint = document.getElementById('settings-llm-endpoint').value.trim();
         state.settings.llmModel = document.getElementById('settings-llm-model').value.trim();
@@ -653,6 +746,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         localStorage.setItem('live_conv_tts_provider', state.settings.ttsProvider);
         localStorage.setItem('live_conv_elevenlabs_key', state.settings.elevenLabsApiKey);
+        localStorage.setItem('live_conv_elevenlabs_model', state.settings.elevenLabsModelId);
         localStorage.setItem('live_conv_llm_key', state.settings.llmApiKey);
         localStorage.setItem('live_conv_llm_endpoint', state.settings.llmEndpoint);
         localStorage.setItem('live_conv_llm_model', state.settings.llmModel);
@@ -663,6 +757,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         return {
             ttsProvider: state.settings.ttsProvider || null,
             elevenLabsApiKey: state.settings.elevenLabsApiKey || null,
+            elevenLabsModelId: state.settings.elevenLabsModelId || null,
             llmApiKey: state.settings.llmApiKey || null,
             llmEndpoint: state.settings.llmEndpoint || null,
             llmModel: state.settings.llmModel || null,

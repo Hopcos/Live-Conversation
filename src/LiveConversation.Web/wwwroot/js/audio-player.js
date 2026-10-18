@@ -1,6 +1,6 @@
 /**
  * AudioPlayer: Manages continuous sentence-level audio queue with Web Audio API.
- * Provides AnalyserNode for visualizer and instant interruption capability.
+ * Provides AnalyserNode for visualizer, zero-lock-in WebSpeech synthesis, and instant interruption.
  */
 class AudioPlayer {
     constructor() {
@@ -11,11 +11,22 @@ class AudioPlayer {
         this.currentSource = null;
         this.currentSentence = null;
         this.playbackRate = 1.0;
+        this._currentReplayResolve = null;
+        this._replayCancelled = false;
+        this._currentWebUtterance = null;
         
         // Callbacks
         this.onPlaybackStateChange = null; // (isPlaying) => {}
         this.onSentenceStart = null;       // (sentenceIndex, text) => {}
         this.onSentenceEnd = null;         // (sentenceIndex) => {}
+
+        // Preload WebSpeech voices
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.getVoices();
+            window.speechSynthesis.onvoiceschanged = () => {
+                window.speechSynthesis.getVoices();
+            };
+        }
     }
 
     _ensureAudioContext() {
@@ -34,15 +45,32 @@ class AudioPlayer {
 
     setPlaybackRate(rate) {
         this.playbackRate = Math.max(0.5, Math.min(2.0, rate));
-        if (this.currentSource) {
-            this.currentSource.playbackRate.setValueAtTime(this.playbackRate, this.audioCtx.currentTime);
+        if (this.currentSource && this.audioCtx) {
+            try {
+                this.currentSource.playbackRate.setValueAtTime(this.playbackRate, this.audioCtx.currentTime);
+            } catch (e) { /* ignore */ }
         }
     }
 
     /**
      * Enqueues an audio sentence for playback.
+     * If base64Audio is absent or decoding fails, smoothly falls back to browser native WebSpeech!
      */
-    async enqueueSentence(sentenceIndex, text, base64Audio, isLast = false) {
+    async enqueueSentence(sentenceIndex, text, base64Audio, isLast = false, countryCode = 'US') {
+        if (!base64Audio) {
+            this.queue.push({
+                sentenceIndex,
+                text,
+                useWebSpeech: true,
+                countryCode,
+                isLast
+            });
+            if (!this.isPlaying) {
+                this._playNext();
+            }
+            return;
+        }
+
         this._ensureAudioContext();
 
         try {
@@ -53,7 +81,7 @@ class AudioPlayer {
                 bytes[i] = binaryString.charCodeAt(i);
             }
 
-            const audioBuffer = await this.audioCtx.decodeAudioData(bytes.buffer);
+            const audioBuffer = await this.audioCtx.decodeAudioData(bytes.buffer.slice(0));
             this.queue.push({
                 sentenceIndex,
                 text,
@@ -65,7 +93,17 @@ class AudioPlayer {
                 this._playNext();
             }
         } catch (err) {
-            console.error('Failed to decode sentence audio:', err);
+            console.warn('Failed to decode sentence audio, queuing for WebSpeech fallback:', err);
+            this.queue.push({
+                sentenceIndex,
+                text,
+                useWebSpeech: true,
+                countryCode,
+                isLast
+            });
+            if (!this.isPlaying) {
+                this._playNext();
+            }
         }
     }
 
@@ -87,6 +125,16 @@ class AudioPlayer {
             this.onSentenceStart(item.sentenceIndex, item.text);
         }
 
+        if (item.useWebSpeech) {
+            this._playWebSpeechDirect(item.text, item.countryCode, this.playbackRate).then(() => {
+                if (this.onSentenceEnd) {
+                    this.onSentenceEnd(item.sentenceIndex);
+                }
+                this._playNext();
+            });
+            return;
+        }
+
         const source = this.audioCtx.createBufferSource();
         source.buffer = item.buffer;
         source.playbackRate.setValueAtTime(this.playbackRate, this.audioCtx.currentTime);
@@ -105,17 +153,36 @@ class AudioPlayer {
         source.start(0);
     }
 
+    isReplayCancelled() {
+        return !!this._replayCancelled;
+    }
+
     /**
-     * Immediately stops playback and clears the queue (barge-in / interrupt).
+     * Immediately stops playback and clears the queue (barge-in / interrupt / replay-switch).
      */
     stop() {
         this.queue = [];
+        this._replayCancelled = true;
+
+        if ('speechSynthesis' in window) {
+            try {
+                window.speechSynthesis.cancel();
+            } catch (e) { /* ignore */ }
+        }
+
+        if (this._currentReplayResolve) {
+            const resolve = this._currentReplayResolve;
+            this._currentReplayResolve = null;
+            resolve();
+        }
+
         if (this.currentSource) {
             try {
-                this.currentSource.onended = null;
-                this.currentSource.stop();
+                const src = this.currentSource;
+                this.currentSource = null;
+                src.onended = null;
+                src.stop();
             } catch (e) { /* ignore */ }
-            this.currentSource = null;
         }
         this.isPlaying = false;
         this.currentSentence = null;
@@ -123,27 +190,202 @@ class AudioPlayer {
     }
 
     /**
-     * Replays a specific audio buffer standalone (e.g., from transcript item).
+     * Matches system-installed voices to the persona's regional accent.
      */
-    async replayAudioBase64(base64Audio, rate = 1.0) {
-        this._ensureAudioContext();
-        try {
-            const binaryString = atob(base64Audio);
-            const len = binaryString.length;
-            const bytes = new Uint8Array(len);
-            for (let i = 0; i < len; i++) {
-                bytes[i] = binaryString.charCodeAt(i);
+    findWebSpeechVoice(countryCode) {
+        if (!('speechSynthesis' in window)) return null;
+        const voices = window.speechSynthesis.getVoices();
+        if (!voices || voices.length === 0) return null;
+
+        const code = (countryCode || 'US').toUpperCase();
+        const langMap = {
+            'UK': ['en-GB', 'en-IE'],
+            'GB': ['en-GB', 'en-IE'],
+            'AU': ['en-AU', 'en-NZ'],
+            'IN': ['en-IN', 'hi-IN'],
+            'CA': ['en-CA', 'en-US'],
+            'US': ['en-US'],
+            'CN': ['zh-CN', 'zh'],
+            'RO': ['ro-RO', 'ro'],
+            'UA': ['uk-UA', 'uk']
+        };
+        const targetLangs = langMap[code] || ['en-US'];
+
+        // 1. Exact BCP-47 language match
+        for (const l of targetLangs) {
+            const match = voices.find(v => v.lang && v.lang.toLowerCase().replace('_', '-').startsWith(l.toLowerCase()));
+            if (match) return match;
+        }
+
+        // 2. Keyword in voice name
+        const namePatterns = {
+            'UK': ['united kingdom', 'great britain', 'uk', 'george', 'susan', 'oliver'],
+            'AU': ['australia', 'australian', 'catherine', 'james'],
+            'IN': ['india', 'indian', 'ravi', 'heera', 'neerja'],
+            'CA': ['canada', 'canadian', 'clara'],
+            'US': ['united states', 'david', 'zira', 'jenny', 'mark'],
+            'CN': ['chinese', 'china', 'mandarin', 'xiaoxiao', 'huihui'],
+            'RO': ['romania', 'romanian'],
+            'UA': ['ukraine', 'ukrainian']
+        };
+        const patterns = namePatterns[code] || [];
+        for (const p of patterns) {
+            const match = voices.find(v => v.name && v.name.toLowerCase().includes(p));
+            if (match) return match;
+        }
+
+        // 3. Fallback to any English voice or first voice
+        return voices.find(v => v.lang && v.lang.startsWith('en')) || voices[0];
+    }
+
+    /**
+     * Speaks text using browser native speech synthesis (Web Speech API).
+     */
+    speakWebSpeech(text, countryCode = 'US', rate = 1.0) {
+        this.stop();
+        this._replayCancelled = false;
+        return this._playWebSpeechDirect(text, countryCode, rate);
+    }
+
+    _playWebSpeechDirect(text, countryCode = 'US', rate = 1.0) {
+        return new Promise((resolve) => {
+            if (!('speechSynthesis' in window) || !text) {
+                resolve();
+                return;
             }
 
-            const audioBuffer = await this.audioCtx.decodeAudioData(bytes.buffer);
-            const source = this.audioCtx.createBufferSource();
-            source.buffer = audioBuffer;
-            source.playbackRate.setValueAtTime(rate, this.audioCtx.currentTime);
-            source.connect(this.analyser);
-            source.start(0);
-        } catch (err) {
-            console.error('Failed to replay sentence:', err);
+            if (this._replayCancelled) {
+                resolve();
+                return;
+            }
+
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(text);
+            const voice = this.findWebSpeechVoice(countryCode);
+            if (voice) {
+                utterance.voice = voice;
+                utterance.lang = voice.lang;
+            }
+            utterance.rate = Math.max(0.6, Math.min(1.5, rate));
+
+            this.isPlaying = true;
+            if (this.onPlaybackStateChange) this.onPlaybackStateChange(true);
+
+            const cleanup = () => {
+                this._currentWebUtterance = null;
+                this._currentReplayResolve = null;
+                this.isPlaying = false;
+                if (this.onPlaybackStateChange) this.onPlaybackStateChange(false);
+                resolve();
+            };
+
+            utterance.onend = cleanup;
+            utterance.onerror = (e) => {
+                console.warn('WebSpeech playback notice:', e);
+                cleanup();
+            };
+
+            this._currentWebUtterance = utterance;
+            this._currentReplayResolve = cleanup;
+            window.speechSynthesis.speak(utterance);
+        });
+    }
+
+    /**
+     * Replays a sequence of audio sentences sequentially at a custom rate (default 0.8x slow).
+     * Stops any previous audio, handles cancellation cleanly, and prevents audio overlapping.
+     */
+    async replaySentenceList(sentenceList, rate = 0.8, countryCode = 'US') {
+        if (!sentenceList || sentenceList.length === 0) return;
+
+        this.stop();
+        this._replayCancelled = false;
+
+        for (const item of sentenceList) {
+            if (this._replayCancelled) break;
+            const b64 = (typeof item === 'string') ? item : item.audioBase64;
+            const txt = (typeof item === 'string') ? '' : item.text;
+            if (b64) {
+                await this._playBufferDirect(b64, rate);
+            } else if (txt) {
+                await this._playWebSpeechDirect(txt, countryCode, rate);
+            }
         }
+    }
+
+    /**
+     * Replays a specific audio buffer standalone (e.g. Test Voice), returning a Promise that resolves
+     * only when playback of this buffer finishes.
+     */
+    async replayAudioBase64(base64Audio, rate = 0.8) {
+        this.stop();
+        this._replayCancelled = false;
+        return this._playBufferDirect(base64Audio, rate);
+    }
+
+    /**
+     * Internal method to decode and play a single audio buffer, awaiting completion.
+     */
+    _playBufferDirect(base64Audio, rate = 0.8) {
+        this._ensureAudioContext();
+
+        return new Promise(async (resolve) => {
+            if (this._replayCancelled) {
+                resolve();
+                return;
+            }
+
+            try {
+                const binaryString = atob(base64Audio);
+                const len = binaryString.length;
+                const bytes = new Uint8Array(len);
+                for (let i = 0; i < len; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+
+                const audioBuffer = await this.audioCtx.decodeAudioData(bytes.buffer.slice(0));
+
+                if (this._replayCancelled) {
+                    resolve();
+                    return;
+                }
+
+                if (this.currentSource) {
+                    try {
+                        const prev = this.currentSource;
+                        this.currentSource = null;
+                        prev.onended = null;
+                        prev.stop();
+                    } catch (e) { /* ignore */ }
+                }
+
+                const source = this.audioCtx.createBufferSource();
+                source.buffer = audioBuffer;
+                source.playbackRate.setValueAtTime(rate, this.audioCtx.currentTime);
+                source.connect(this.analyser);
+
+                this.currentSource = source;
+                this.isPlaying = true;
+                if (this.onPlaybackStateChange) this.onPlaybackStateChange(true);
+
+                const onFinished = () => {
+                    if (this.currentSource === source) {
+                        this.currentSource = null;
+                    }
+                    this._currentReplayResolve = null;
+                    this.isPlaying = false;
+                    if (this.onPlaybackStateChange) this.onPlaybackStateChange(false);
+                    resolve();
+                };
+
+                source.onended = onFinished;
+                this._currentReplayResolve = onFinished;
+                source.start(0);
+            } catch (err) {
+                console.error('Failed to replay sentence:', err);
+                resolve();
+            }
+        });
     }
 }
 

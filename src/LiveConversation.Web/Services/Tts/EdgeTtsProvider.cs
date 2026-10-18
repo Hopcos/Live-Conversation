@@ -39,18 +39,32 @@ public class EdgeTtsProvider : ITtsProvider
 
         var connectionId = Guid.NewGuid().ToString("N");
         var secMsGec = GenerateSecMsGec();
-        var wsUri = new Uri($"{EdgeWssBaseUrl}?TrustedClientToken={TrustedClientToken}&Sec-MS-GEC={secMsGec}&Sec-MS-GEC-Version=1-130.0.2849.68&ConnectionId={connectionId}");
+        var wsUri = new Uri($"{EdgeWssBaseUrl}?TrustedClientToken={TrustedClientToken}&Sec-MS-GEC={secMsGec}&Sec-MS-GEC-Version=1-131.0.2903.86&ConnectionId={connectionId}");
 
         using var ws = new ClientWebSocket();
-        ws.Options.SetRequestHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0.0.0");
+        ws.Options.SetRequestHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.2903.86");
         ws.Options.SetRequestHeader("Origin", "chrome-extension://jdiccldimpdaibmpdkjnbmckianbfold");
+        ws.Options.SetRequestHeader("Accept-Language", "en-US,en;q=0.9");
         ws.Options.SetRequestHeader("Pragma", "no-cache");
         ws.Options.SetRequestHeader("Cache-Control", "no-cache");
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(TimeSpan.FromSeconds(15)); // 15s timeout safeguard
 
-        await ws.ConnectAsync(wsUri, cts.Token);
+        try
+        {
+            await ws.ConnectAsync(wsUri, cts.Token);
+        }
+        catch (WebSocketException wse)
+        {
+            _logger.LogWarning(wse, "Microsoft EdgeTTS rejected connection (403/Forbidden)");
+            throw new InvalidOperationException("微软 EdgeTTS 云端节点连接受限 (403 握手拒绝)。此为微软针对非官方浏览器流量的常见限制。建议切换为【ElevenLabs】或【浏览器原生 WebSpeech】语音引擎。", wse);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "EdgeTTS connection error: {Message}", ex.Message);
+            throw new InvalidOperationException($"微软 EdgeTTS 连接失败: {ex.Message}。建议切换为【ElevenLabs】或【浏览器原生 WebSpeech】语音引擎。", ex);
+        }
 
         // 1. Send speech.config
         var configMsg = "Content-Type:application/json; charset=utf-8\r\nPath:speech.config\r\n\r\n{\"context\":{\"synthesis\":{\"audio\":{\"metadataoptions\":{\"sentenceBoundaryEnabled\":\"false\",\"wordBoundaryEnabled\":\"false\"},\"outputFormat\":\"audio-24khz-48kbitrate-mono-mp3\"}}}}";

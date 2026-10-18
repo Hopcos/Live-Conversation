@@ -49,7 +49,7 @@ public class ShadowCoachService : ICoachService
         ClientSettings? settings = null, 
         CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(userText) || userText.Trim().Length < 4)
+        if (string.IsNullOrWhiteSpace(userText) || userText.Trim().Length < 2)
         {
             return null;
         }
@@ -72,7 +72,7 @@ public class ShadowCoachService : ICoachService
                   "vocabularyHighlight": "推荐掌握的地道表达或短语"
                 }
 
-                If the user's sentence is already natural and error-free, set "hasIssues": false, but you can still provide a slightly more sophisticated or idiomatic alternative in "nativeAlternative".
+                If the user's sentence is already natural and error-free, set "hasIssues": false, but still provide a native casual alternative in "nativeAlternative".
                 """;
 
             var userPrompt = $"""
@@ -86,31 +86,41 @@ public class ShadowCoachService : ICoachService
                 ChatMessage.CreateUserMessage(userPrompt)
             };
 
-            var options = new ChatCompletionOptions
+            ClientResult<ChatCompletion> completion;
+            try
             {
-                Temperature = 0.3f,
-                MaxOutputTokenCount = 300,
-                ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
-            };
-
-            var completion = await chatClient.CompleteChatAsync(messages, options, ct);
-            var json = completion.Value.Content[0].Text?.Trim();
-
-            if (string.IsNullOrWhiteSpace(json)) return null;
-
-            if (json.StartsWith("```json", StringComparison.OrdinalIgnoreCase))
-            {
-                json = json[7..];
+                var options = new ChatCompletionOptions
+                {
+                    Temperature = 0.3f,
+                    MaxOutputTokenCount = 1000,
+                    ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
+                };
+                completion = await chatClient.CompleteChatAsync(messages, options, ct);
             }
-            if (json.StartsWith("```"))
+            catch (Exception ex)
             {
-                json = json[3..];
+                _logger.LogInformation("JsonObjectFormat not supported by provider, retrying standard completion: {Message}", ex.Message);
+                var fallbackOptions = new ChatCompletionOptions
+                {
+                    Temperature = 0.3f,
+                    MaxOutputTokenCount = 1000
+                };
+                completion = await chatClient.CompleteChatAsync(messages, fallbackOptions, ct);
             }
-            if (json.EndsWith("```"))
+
+            var rawText = string.Join("\n", completion.Value.Content.Select(c => c.Text)).Trim();
+            if (string.IsNullOrWhiteSpace(rawText)) return null;
+
+            // Extract the outermost JSON block
+            var firstBrace = rawText.IndexOf('{');
+            var lastBrace = rawText.LastIndexOf('}');
+            if (firstBrace < 0 || lastBrace <= firstBrace)
             {
-                json = json[..^3];
+                _logger.LogWarning("No valid JSON structure found in coach response: {Raw}", rawText);
+                return null;
             }
-            json = json.Trim();
+
+            var json = rawText.Substring(firstBrace, lastBrace - firstBrace + 1);
 
             var feedback = JsonSerializer.Deserialize<CoachFeedback>(json, new JsonSerializerOptions
             {

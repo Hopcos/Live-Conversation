@@ -31,8 +31,9 @@ public class CoachFeedback
 
 public class ClientSettings
 {
-    public string? TtsProvider { get; set; } // "ElevenLabs" or "EdgeTTS"
+    public string? TtsProvider { get; set; } // "ElevenLabs" or "EdgeTTS" or "OpenAITTS"
     public string? ElevenLabsApiKey { get; set; }
+    public string? ElevenLabsModelId { get; set; }
     public string? LlmApiKey { get; set; }
     public string? LlmEndpoint { get; set; }
     public string? LlmModel { get; set; }

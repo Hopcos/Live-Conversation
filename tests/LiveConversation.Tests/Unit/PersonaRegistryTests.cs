@@ -27,8 +27,8 @@ public class PersonaRegistryTests
     [InlineData("AU", "Liam O'Connor", "en-AU-WilliamNeural")]
     [InlineData("IN", "Priya Sharma", "en-IN-NeerjaNeural")]
     [InlineData("CA", "Chloe Tremblay", "en-CA-ClaraNeural")]
-    [InlineData("RO", "Elena Radu", "en-US-JennyNeural")]
-    [InlineData("UA", "Oksana Kovalenko", "en-GB-RyanNeural")]
+    [InlineData("RO", "Elena Radu", "en-IE-EmilyNeural")]
+    [InlineData("UA", "Oksana Kovalenko", "en-GB-SoniaNeural")]
     [InlineData("CN", "Lin Wei (林薇)", "zh-CN-XiaoxiaoNeural")]
     public void GetPersona_KnownCountry_ReturnsCorrectPersonaAndVoiceMapping(
         string countryCode, 
@@ -42,6 +42,7 @@ public class PersonaRegistryTests
         Assert.Equal(expectedEdgeVoice, persona.EdgeTtsVoiceName);
         Assert.False(string.IsNullOrWhiteSpace(persona.ElevenLabsVoiceId));
         Assert.False(string.IsNullOrWhiteSpace(persona.SystemPrompt));
+        Assert.False(string.IsNullOrWhiteSpace(persona.InitialGreeting));
     }
 
     [Fact]

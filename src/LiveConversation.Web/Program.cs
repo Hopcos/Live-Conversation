@@ -57,6 +57,7 @@ app.MapGet("/api/config", (IConfiguration config) =>
         TtsProvider = appSettings.Tts.ActiveProvider,
         LlmModel = appSettings.Llm.ModelId,
         LlmEndpoint = appSettings.Llm.Endpoint,
+        ElevenLabsModel = appSettings.ElevenLabs.ModelId,
         HasElevenLabsKey = !string.IsNullOrWhiteSpace(appSettings.ElevenLabs.ApiKey),
         HasLlmKey = !string.IsNullOrWhiteSpace(appSettings.Llm.ApiKey)
     });
