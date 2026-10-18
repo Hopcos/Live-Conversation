@@ -88,6 +88,10 @@ public class ConversationHub : Hub
             {
                 _logger.LogError(ex, "Failed to synthesize initial greeting: {Message}", ex.Message);
             }
+            finally
+            {
+                await Clients.Client(connectionId).SendAsync("AiTurnCompleted");
+            }
         });
     }
 

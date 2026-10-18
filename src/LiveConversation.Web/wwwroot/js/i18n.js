@@ -58,7 +58,9 @@ const I18N_DICTIONARY = {
         coach_correction: "Correction:",
         coach_native: "Native Phrasing:",
         coach_explanation: "💡 Explanation:",
-        coach_spotlight: "🌟 Key Phrase:"
+        coach_spotlight: "🌟 Key Phrase:",
+        partner_badge: "AI Partner",
+        current_scenario_prefix: "Scenario:"
     },
     zh: {
         brand_title: "LiveConversation AI 模拟真人对话",
@@ -115,7 +117,9 @@ const I18N_DICTIONARY = {
         coach_correction: "语法修正：",
         coach_native: "母语级地道表达：",
         coach_explanation: "💡 深度解析：",
-        coach_spotlight: "🌟 亮点习语："
+        coach_spotlight: "🌟 亮点习语：",
+        partner_badge: "AI 陪练伙伴",
+        current_scenario_prefix: "实战场景："
     }
 };
 

@@ -170,10 +170,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     connection.on('ConversationInterrupted', () => {
         audioPlayer.stop();
+        if (state.activeAssistantTurnElement) {
+            attachReplayButtonsToTurn(state.activeAssistantTurnElement, state.sentencesInTurn);
+            state.activeAssistantTurnElement = null;
+            state.sentencesInTurn = [];
+        }
         showNotification('Partner interrupted', 'info');
     });
 
     connection.on('ReceiveError', (errorMsg) => {
+        state.activeAssistantTurnElement = null;
+        state.sentencesInTurn = [];
         showNotification(errorMsg, 'error');
     });
 
@@ -222,6 +229,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 5. UI Render Helpers
     function renderUserBubble(text) {
+        // Finalize previous assistant turn (e.g. welcome message) so next AI response creates a brand new bubble after this user bubble
+        if (state.activeAssistantTurnElement) {
+            attachReplayButtonsToTurn(state.activeAssistantTurnElement, state.sentencesInTurn);
+            state.activeAssistantTurnElement = null;
+            state.sentencesInTurn = [];
+        }
+
         const stream = document.getElementById('dialogue-stream');
         const bubble = document.createElement('div');
         bubble.className = 'flex justify-end mb-4 animate-fade-in';
