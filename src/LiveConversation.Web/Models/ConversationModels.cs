@@ -21,7 +21,7 @@ public record AudioSentencePayload(
 
 public class CoachFeedback
 {
-    public required string OriginalText { get; set; }
+    public string OriginalText { get; set; } = string.Empty;
     public string? CorrectedText { get; set; }
     public string? NativeAlternative { get; set; }
     public string? Explanation { get; set; }
