@@ -210,6 +210,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 4. Session & Messaging Methods
     async function initSession() {
         audioPlayer.stop();
+        audioPlayer.resetCancelState();
         await connection.invoke('InitSession', state.currentCountry, state.currentScene, getClientSettingsPayload());
     }
 
@@ -491,6 +492,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             const country = btn.dataset.country;
             if (state.currentCountry === country) return;
 
+            // Unlock audio context and speech synthesis immediately in user gesture
+            audioPlayer._ensureAudioContext();
+            if ('speechSynthesis' in window) {
+                try { window.speechSynthesis.resume(); } catch (e) { }
+            }
+
             document.querySelectorAll('.country-btn').forEach(b => {
                 b.classList.remove('bg-indigo-600', 'text-white', 'border-indigo-500');
                 b.classList.add('bg-slate-800', 'text-slate-300');
@@ -508,6 +515,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         btn.addEventListener('click', async () => {
             const scene = btn.dataset.scene;
             if (state.currentScene === scene) return;
+
+            // Unlock audio context and speech synthesis immediately in user gesture
+            audioPlayer._ensureAudioContext();
+            if ('speechSynthesis' in window) {
+                try { window.speechSynthesis.resume(); } catch (e) { }
+            }
 
             document.querySelectorAll('.scenario-btn').forEach(b => {
                 b.classList.remove('bg-indigo-600/30', 'border-indigo-500', 'text-indigo-200');
@@ -709,7 +722,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                     state.settings.ttsProvider = cfg.ttsProvider;
                 }
                 if (!state.settings.elevenLabsModelId && cfg.elevenLabsModel) {
-                    state.settings.elevenLabsModelId = cfg.elevenLabsModel;
+                    state.settings.elevenLabsModelId = cfg.elevenLabsModel === 'eleven_v4_turbo' ? 'eleven_multilingual_v2' : cfg.elevenLabsModel;
+                } else if (state.settings.elevenLabsModelId === 'eleven_v4_turbo') {
+                    state.settings.elevenLabsModelId = 'eleven_multilingual_v2';
                 }
                 if (!state.settings.llmEndpoint && cfg.llmEndpoint) {
                     state.settings.llmEndpoint = cfg.llmEndpoint;

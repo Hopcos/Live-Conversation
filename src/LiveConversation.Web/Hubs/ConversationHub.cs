@@ -82,7 +82,9 @@ public class ConversationHub : Hub
                 var ttsProvider = _ttsFactory.GetProvider(settings?.TtsProvider);
                 var voiceProfile = GetVoiceProfile(persona, ttsProvider.ProviderName, settings);
                 byte[] audioBytes = [];
-                var isWebSpeech = settings?.TtsProvider?.Equals("WebSpeech", StringComparison.OrdinalIgnoreCase) == true;
+                var effectiveProviderName = ttsProvider.ProviderName;
+                var isWebSpeech = effectiveProviderName.Equals("WebSpeech", StringComparison.OrdinalIgnoreCase)
+                    || settings?.TtsProvider?.Equals("WebSpeech", StringComparison.OrdinalIgnoreCase) == true;
 
                 if (!isWebSpeech)
                 {

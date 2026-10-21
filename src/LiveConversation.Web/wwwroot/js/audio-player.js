@@ -43,6 +43,10 @@ class AudioPlayer {
         }
     }
 
+    resetCancelState() {
+        this._replayCancelled = false;
+    }
+
     setPlaybackRate(rate) {
         this.playbackRate = Math.max(0.5, Math.min(2.0, rate));
         if (this.currentSource && this.audioCtx) {
@@ -57,6 +61,8 @@ class AudioPlayer {
      * If base64Audio is absent or decoding fails, smoothly falls back to browser native WebSpeech!
      */
     async enqueueSentence(sentenceIndex, text, base64Audio, isLast = false, countryCode = 'US') {
+        this._replayCancelled = false; // Always clear cancellation on fresh incoming sentence!
+
         if (!base64Audio) {
             this.queue.push({
                 sentenceIndex,
@@ -126,13 +132,17 @@ class AudioPlayer {
         }
 
         if (item.useWebSpeech) {
-            this._playWebSpeechDirect(item.text, item.countryCode, this.playbackRate).then(() => {
+            this._playWebSpeechDirect(item.text, item.countryCode, this.playbackRate, false).then(() => {
                 if (this.onSentenceEnd) {
                     this.onSentenceEnd(item.sentenceIndex);
                 }
                 this._playNext();
             });
             return;
+        }
+
+        if (this.audioCtx && this.audioCtx.state === 'suspended') {
+            this.audioCtx.resume();
         }
 
         const source = this.audioCtx.createBufferSource();
@@ -244,34 +254,48 @@ class AudioPlayer {
     speakWebSpeech(text, countryCode = 'US', rate = 1.0) {
         this.stop();
         this._replayCancelled = false;
-        return this._playWebSpeechDirect(text, countryCode, rate);
+        return this._playWebSpeechDirect(text, countryCode, rate, false);
     }
 
-    _playWebSpeechDirect(text, countryCode = 'US', rate = 1.0) {
+    _playWebSpeechDirect(text, countryCode = 'US', rate = 1.0, isReplay = false) {
         return new Promise((resolve) => {
             if (!('speechSynthesis' in window) || !text) {
                 resolve();
                 return;
             }
 
-            if (this._replayCancelled) {
+            if (isReplay && this._replayCancelled) {
                 resolve();
                 return;
             }
 
-            window.speechSynthesis.cancel();
+            // Unpause speechSynthesis if Chrome suspended it
+            try {
+                if (window.speechSynthesis.paused) {
+                    window.speechSynthesis.resume();
+                }
+            } catch (e) { /* ignore */ }
+
             const utterance = new SpeechSynthesisUtterance(text);
+            const code = (countryCode || 'US').toUpperCase();
+            const defaultLang = {
+                'UK': 'en-GB', 'GB': 'en-GB', 'AU': 'en-AU', 'IN': 'en-IN',
+                'CA': 'en-CA', 'CN': 'zh-CN', 'RO': 'ro-RO', 'UA': 'uk-UA', 'US': 'en-US'
+            }[code] || 'en-US';
+
             const voice = this.findWebSpeechVoice(countryCode);
             if (voice) {
                 utterance.voice = voice;
-                utterance.lang = voice.lang;
+                utterance.lang = voice.lang || defaultLang;
+            } else {
+                utterance.lang = defaultLang;
             }
             utterance.rate = Math.max(0.6, Math.min(1.5, rate));
 
-            this.isPlaying = true;
-            if (this.onPlaybackStateChange) this.onPlaybackStateChange(true);
-
+            let finished = false;
             const cleanup = () => {
+                if (finished) return;
+                finished = true;
                 this._currentWebUtterance = null;
                 this._currentReplayResolve = null;
                 this.isPlaying = false;
@@ -279,15 +303,27 @@ class AudioPlayer {
                 resolve();
             };
 
+            utterance.onstart = () => {
+                this.isPlaying = true;
+                if (this.onPlaybackStateChange) this.onPlaybackStateChange(true);
+            };
+
             utterance.onend = cleanup;
             utterance.onerror = (e) => {
-                console.warn('WebSpeech playback notice:', e);
+                console.warn('WebSpeech playback event:', e);
                 cleanup();
             };
 
+            // Keep reference to prevent Chromium garbage collection bug
             this._currentWebUtterance = utterance;
             this._currentReplayResolve = cleanup;
-            window.speechSynthesis.speak(utterance);
+
+            try {
+                window.speechSynthesis.speak(utterance);
+            } catch (err) {
+                console.error('Failed to speak via WebSpeech:', err);
+                cleanup();
+            }
         });
     }
 
@@ -306,9 +342,9 @@ class AudioPlayer {
             const b64 = (typeof item === 'string') ? item : item.audioBase64;
             const txt = (typeof item === 'string') ? '' : item.text;
             if (b64) {
-                await this._playBufferDirect(b64, rate);
+                await this._playBufferDirect(b64, rate, true);
             } else if (txt) {
-                await this._playWebSpeechDirect(txt, countryCode, rate);
+                await this._playWebSpeechDirect(txt, countryCode, rate, true);
             }
         }
     }
@@ -320,17 +356,17 @@ class AudioPlayer {
     async replayAudioBase64(base64Audio, rate = 0.8) {
         this.stop();
         this._replayCancelled = false;
-        return this._playBufferDirect(base64Audio, rate);
+        return this._playBufferDirect(base64Audio, rate, false);
     }
 
     /**
      * Internal method to decode and play a single audio buffer, awaiting completion.
      */
-    _playBufferDirect(base64Audio, rate = 0.8) {
+    _playBufferDirect(base64Audio, rate = 0.8, isReplay = false) {
         this._ensureAudioContext();
 
         return new Promise(async (resolve) => {
-            if (this._replayCancelled) {
+            if (isReplay && this._replayCancelled) {
                 resolve();
                 return;
             }
@@ -345,9 +381,13 @@ class AudioPlayer {
 
                 const audioBuffer = await this.audioCtx.decodeAudioData(bytes.buffer.slice(0));
 
-                if (this._replayCancelled) {
+                if (isReplay && this._replayCancelled) {
                     resolve();
                     return;
+                }
+
+                if (this.audioCtx && this.audioCtx.state === 'suspended') {
+                    await this.audioCtx.resume();
                 }
 
                 if (this.currentSource) {
@@ -382,7 +422,7 @@ class AudioPlayer {
                 this._currentReplayResolve = onFinished;
                 source.start(0);
             } catch (err) {
-                console.error('Failed to replay sentence:', err);
+                console.error('Failed to replay sentence buffer:', err);
                 resolve();
             }
         });

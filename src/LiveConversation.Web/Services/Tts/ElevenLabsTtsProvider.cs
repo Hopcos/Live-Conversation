@@ -44,11 +44,21 @@ public class ElevenLabsTtsProvider : ITtsProvider
             ? profile.VoiceId 
             : "21m00Tcm4TlvDq8ikWAM"; // Default Rachel
 
-        var modelId = !string.IsNullOrWhiteSpace(profile.ModelId)
+        var rawModel = !string.IsNullOrWhiteSpace(profile.ModelId)
             ? profile.ModelId
             : (!string.IsNullOrWhiteSpace(_appSettings.ElevenLabs.ModelId)
                 ? _appSettings.ElevenLabs.ModelId
                 : "eleven_multilingual_v2");
+
+        var modelId = rawModel switch
+        {
+            "eleven_multilingual_v2" => "eleven_multilingual_v2",
+            "eleven_turbo_v2_5" => "eleven_turbo_v2_5",
+            "eleven_flash_v2_5" => "eleven_flash_v2_5",
+            "eleven_turbo_v2" => "eleven_turbo_v2",
+            "eleven_monolingual_v1" => "eleven_monolingual_v1",
+            _ => "eleven_multilingual_v2"
+        };
 
         var url = $"https://api.elevenlabs.io/v1/text-to-speech/{voiceId}?output_format=mp3_44100_128";
 
