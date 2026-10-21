@@ -185,7 +185,8 @@ public static class PersonaRegistry
             Icon = "☕",
             Description = "Relaxed, low-pressure small talk about daily life, hobbies, and weekend plans.",
             ContextPrompt = "Setting: You and the user are having coffee together on a sunny afternoon. The conversation should be light, friendly, and informal.",
-            InitialGreeting = "Hey there! Great to see you. How has your day been going so far?"
+            InitialGreeting = "Hey there! Great to see you. How has your day been going so far?",
+            SuggestedTopics = ["Weekend plans and favorite cafes", "Favorite movies & shows", "Work-from-home routines", "Hobbies and traveling"]
         },
         new ScenarioConfig
         {
@@ -194,7 +195,8 @@ public static class PersonaRegistry
             Icon = "💼",
             Description = "Professional behavioral interview questions, career background, and problem solving.",
             ContextPrompt = "Setting: You are conducting a friendly but structured job interview. Ask one behavioral question at a time and follow up on their specific answers.",
-            InitialGreeting = "Welcome! Thanks for taking the time to speak with me today. To kick things off, could you tell me a little about yourself and your background?"
+            InitialGreeting = "Welcome! Thanks for taking the time to speak with me today. To kick things off, could you tell me a little about yourself and your background?",
+            SuggestedTopics = ["Tell me about yourself", "My biggest strength and weakness", "Handling a difficult team conflict", "Where I see myself in 5 years"]
         },
         new ScenarioConfig
         {
@@ -203,7 +205,8 @@ public static class PersonaRegistry
             Icon = "🎓",
             Description = "Part 2 and 3 simulation: descriptive fluency, opinion justification, and abstract discussion.",
             ContextPrompt = "Setting: You are an IELTS examiner. Encourage the candidate to expand on their ideas, use cohesive devices, and discuss societal or abstract aspects.",
-            InitialGreeting = "Hello and welcome to this speaking practice session. Let's discuss hobbies and leisure activities. What do you enjoy doing in your free time?"
+            InitialGreeting = "Hello and welcome to this speaking practice session. Let's discuss hobbies and leisure activities. What do you enjoy doing in your free time?",
+            SuggestedTopics = ["Describe my hometown & changes", "An inspiring person I admire", "Pros and cons of remote work", "Traditional vs modern education"]
         },
         new ScenarioConfig
         {
@@ -212,7 +215,8 @@ public static class PersonaRegistry
             Icon = "✈️",
             Description = "Airports, immigration, hotel reservations, asking directions, and handling travel hitches.",
             ContextPrompt = "Setting: You are working at an international airport information desk or hotel front desk. Assist the user with travel inquiries.",
-            InitialGreeting = "Good day! Welcome to our counter. How may I assist you with your travel today?"
+            InitialGreeting = "Good day! Welcome to our counter. How may I assist you with your travel today?",
+            SuggestedTopics = ["Checking in for flight & baggage", "Asking directions to gate", "Reporting a delayed flight", "Hotel check-in & breakfast inquiry"]
         },
         new ScenarioConfig
         {
@@ -221,7 +225,8 @@ public static class PersonaRegistry
             Icon = "💻",
             Description = "Agile standup, architectural debates, discussing trade-offs and project priorities.",
             ContextPrompt = "Setting: You are a tech lead or product teammate in a team sync. Discuss features, engineering challenges, and trade-offs.",
-            InitialGreeting = "Morning! Let's do a quick sync on our current sprint. What did you work on yesterday and what's on your radar today?"
+            InitialGreeting = "Morning! Let's do a quick sync on our current sprint. What did you work on yesterday and what's on your radar today?",
+            SuggestedTopics = ["Yesterday's API endpoint fixes", "Investigating a latency bottleneck", "Trade-offs of microservices vs monolith", "Code review & blocker discussion"]
         }
     ];
 
@@ -237,5 +242,62 @@ public static class PersonaRegistry
         var scene = Scenarios.FirstOrDefault(s => 
             s.Id.Equals(sceneId, StringComparison.OrdinalIgnoreCase));
         return scene ?? Scenarios[0];
+    }
+
+    public static string GetScenarioGreeting(PersonaConfig persona, ScenarioConfig scenario)
+    {
+        var country = persona.CountryCode.ToUpperInvariant();
+        return scenario.Id switch
+        {
+            "job-interview" => country switch
+            {
+                "US" => "Hi, welcome! Thanks for coming in today. To kick off our interview, could you tell me a little about yourself and your professional background?",
+                "UK" => "Good day and welcome. Splendid to meet you. To begin our interview today, could you tell me a bit about your professional background?",
+                "AU" => "G'day! Thanks for dropping in for the interview today, mate. To kick things off, could you tell me a bit about yourself and your background?",
+                "IN" => "Hello and warm welcome! Thank you for joining this interview session today. Could you kindly walk me through your background and experience?",
+                "CA" => "Hi there, welcome! Thanks for meeting with me today, eh? To start off, could you tell me a bit about yourself and your work background?",
+                "RO" => "Salut and welcome! It is great to meet you today. To start our interview, could you share a bit about your background and experience?",
+                "UA" => "Warm greetings and welcome! Thank you for joining me today. Could you tell me a little about yourself and your professional background?",
+                "CN" => "Hello and welcome! 欢迎参加今天的英文求职面试模拟。To kick things off, could you tell me a little about yourself and your experience?",
+                _ => scenario.InitialGreeting
+            },
+            "ielts-speaking" => country switch
+            {
+                "US" => "Hello and welcome to this IELTS speaking practice session. Let's start with Part 1: Could you tell me about what you enjoy doing in your free time?",
+                "UK" => "Good day. Welcome to your IELTS speaking assessment. To begin with Part 1, could you tell me a little about your hometown and what you enjoy doing there?",
+                "AU" => "G'day! Welcome to your IELTS speaking practice today, mate. Let's jump into Part 1: What do you usually like to get up to on the weekends?",
+                "IN" => "Hello and welcome to this IELTS speaking test session. Kindly let us begin with Part 1: How do you spend your leisure time and weekends?",
+                "CA" => "Hi there! Welcome to the IELTS speaking practice. Let's start with Part 1: What kind of outdoor activities or hobbies do you enjoy the most, eh?",
+                "RO" => "Salut and welcome to this IELTS speaking simulation. Let us begin Part 1: What do you enjoy doing during your free time and weekends?",
+                "UA" => "Warm greetings! Welcome to our IELTS speaking practice. Let us begin Part 1: Could you tell me about your hometown and what you love about it?",
+                "CN" => "Hello and welcome! 欢迎来到雅思口语模拟实战。Let's begin with Part 1: What do you usually enjoy doing in your free time?",
+                _ => scenario.InitialGreeting
+            },
+            "travel-airport" => country switch
+            {
+                "US" => "Hi there! Welcome to the information counter. How can I assist you with your flight or travel plans today?",
+                "UK" => "Good day! Welcome to our counter. How may I assist you with your travels or directions today?",
+                "AU" => "G'day mate! Welcome to our travel desk. How can I help you out with your trip or flight today?",
+                "IN" => "Hello and warm welcome! Welcome to our assistance desk. How may I help you with your journey or travel arrangements today?",
+                "CA" => "Hi there! Welcome to our travel service desk. How can I help you with your flights or hotel bookings today, eh?",
+                "RO" => "Salut! Welcome to the travel assistance counter. How may I help you with your flight or hotel reservations today?",
+                "UA" => "Warm greetings and welcome! How may I assist you with your flight tickets or travel itinerary today?",
+                "CN" => "Hello! 欢迎来到机场出行业务咨询台。How can I assist you with your flights or travel arrangements today?",
+                _ => scenario.InitialGreeting
+            },
+            "tech-discussion" => country switch
+            {
+                "US" => "Morning everyone! Let's do our daily tech standup. What did you work on yesterday, and what are you tackling today?",
+                "UK" => "Good morning team. Let's have a quick standup sync. What did you manage to get done yesterday, and what's on your radar today?",
+                "AU" => "Morning team! Quick standup time, mates. What did you get sorted yesterday, and what are you cracking on with today?",
+                "IN" => "Good morning team! Let us do our daily sprint standup, ya. What was completed yesterday and what are your priorities for today?",
+                "CA" => "Morning team! Time for our daily standup, eh? What did you wrap up yesterday, and what are you working on today?",
+                "RO" => "Salut team! Let's sync up for our sprint standup. What did you work on yesterday, and what features are you focusing on today?",
+                "UA" => "Good morning team! Let's do our quick engineering sync. What did you accomplish yesterday, and what are your plans for today?",
+                "CN" => "Morning! 早上好，咱们开始今天的敏捷技术晨会。What did you work on yesterday and what's on your agenda today?",
+                _ => scenario.InitialGreeting
+            },
+            _ => persona.InitialGreeting ?? scenario.InitialGreeting
+        };
     }
 }

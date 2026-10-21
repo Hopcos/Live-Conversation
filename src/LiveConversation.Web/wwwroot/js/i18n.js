@@ -21,6 +21,9 @@ const I18N_DICTIONARY = {
         section_accent: "1. Select Accent & Persona (Spoken Style)",
         section_accent_sub: "Switch anytime",
         section_scenario: "2. Select Practice Scenario",
+        collapse_accent_scenario_title: "Accents & Scenarios",
+        collapse_expand: "Expand",
+        collapse_hide: "Collapse",
         scenario_daily_chat: "Coffee Chat",
         scenario_job_interview: "Job Interview",
         scenario_ielts: "IELTS Speaking",
@@ -61,7 +64,37 @@ const I18N_DICTIONARY = {
         coach_explanation: "💡 Explanation:",
         coach_spotlight: "🌟 Key Phrase:",
         partner_badge: "AI Partner",
-        current_scenario_prefix: "Scenario:"
+        current_scenario_prefix: "Scenario:",
+
+        // Hover Descriptions for Personas
+        persona_name_US: "Rachel Vance (New York)",
+        persona_desc_US: "Standard American English, natural pacing, clear intonation.",
+        persona_name_UK: "Arthur Pendelton (London RP)",
+        persona_desc_UK: "British English (Received Pronunciation / Oxford), articulate, refined, rich British idioms.",
+        persona_name_AU: "Liam O'Connor (Sydney)",
+        persona_desc_AU: "Australian English (Aussie), laid-back, energetic cadence, distinctive Aussie colloquialisms.",
+        persona_name_IN: "Priya Sharma (Bengaluru)",
+        persona_desc_IN: "Indian English, crisp articulation, melodic rhythm, authentic South Asian conversational style.",
+        persona_name_CA: "Chloe Tremblay (Vancouver)",
+        persona_desc_CA: "Canadian English, warm, polite, distinctive Canadian conversational markers ('eh', 'for sure').",
+        persona_name_RO: "Elena Radu (Bucharest)",
+        persona_desc_RO: "Eastern European / Romanian English, clear articulation, melodic European cadence.",
+        persona_name_UA: "Oksana Kovalenko (Kyiv)",
+        persona_desc_UA: "Ukrainian / Slavic English, gentle cadence, warm, lyrical and encouraging.",
+        persona_name_CN: "Lin Wei (林薇) (Shanghai)",
+        persona_desc_CN: "Bilingual English & Mandarin (中英双语切换), patient, supportive, authentic pronunciation coach.",
+
+        // Hover Descriptions for Scenarios
+        scenario_title_daily_chat: "Casual Coffee Chat",
+        scenario_desc_daily_chat: "Relaxed, low-pressure small talk about daily life, hobbies, and weekend plans.",
+        scenario_title_job_interview: "Job Interview Practice",
+        scenario_desc_job_interview: "Professional behavioral interview questions, career background, and problem solving.",
+        scenario_title_ielts: "IELTS Speaking Prep",
+        scenario_desc_ielts: "Part 2 and 3 simulation: descriptive fluency, opinion justification, and abstract discussion.",
+        scenario_title_travel: "Travel & Hotel Check-in",
+        scenario_desc_travel: "Airports, immigration, hotel reservations, asking directions, and handling travel hitches.",
+        scenario_title_tech: "Tech & Product Standup",
+        scenario_desc_tech: "Agile standup, architectural debates, discussing trade-offs and project priorities."
     },
     zh: {
         brand_title: "LiveConversation AI 模拟真人对话",
@@ -81,6 +114,9 @@ const I18N_DICTIONARY = {
         section_accent: "1. 选择口音风格与发音人",
         section_accent_sub: "点击即刻热切换",
         section_scenario: "2. 选择口语实战场景",
+        collapse_accent_scenario_title: "口音发音人与实战场景",
+        collapse_expand: "展开选择",
+        collapse_hide: "向上收起",
         scenario_daily_chat: "日常闲聊",
         scenario_job_interview: "求职面试",
         scenario_ielts: "雅思口语",
@@ -121,7 +157,37 @@ const I18N_DICTIONARY = {
         coach_explanation: "💡 深度解析：",
         coach_spotlight: "🌟 亮点习语：",
         partner_badge: "AI 陪练伙伴",
-        current_scenario_prefix: "实战场景："
+        current_scenario_prefix: "实战场景：",
+
+        // Hover Descriptions for Personas
+        persona_name_US: "Rachel Vance (纽约 • 美式口音)",
+        persona_desc_US: "标准美式英语，语速自然，语调清晰亲切，科技职场地道口语。",
+        persona_name_UK: "Arthur Pendelton (伦敦 • 英式牛津音)",
+        persona_desc_UK: "英式标准发音（牛津RP），优雅考究，地道英伦文学与习语表达。",
+        persona_name_AU: "Liam O'Connor (悉尼 • 澳洲口音)",
+        persona_desc_AU: "澳大利亚口音，轻松开朗，极具澳式俚语特色（G'day mate, no worries）。",
+        persona_name_IN: "Priya Sharma (班加罗尔 • 印度口音)",
+        persona_desc_IN: "印度英语，咬字清晰，南亚特有语调旋律与国际IT职场口语。",
+        persona_name_CA: "Chloe Tremblay (温哥华 • 加拿大音)",
+        persona_desc_CA: "加拿大口音，亲和温和，带典型枫叶国口语特色（eh?, for sure）。",
+        persona_name_RO: "Elena Radu (布加勒斯特 • 欧式口音)",
+        persona_desc_RO: "东欧/罗马尼亚口音，欧式语调清脆明晰，欧洲数字游民与科技表达。",
+        persona_name_UA: "Oksana Kovalenko (基辅 • 斯拉夫口音)",
+        persona_desc_UA: "乌克兰/斯拉夫口音，温和抒情，声调优雅，耐心鼓励口语初学者。",
+        persona_name_CN: "Lin Wei (林薇) (上海 • 中英双语)",
+        persona_desc_CN: "中英双语切换，耐心循序渐进，标准地道发音，双语纠错教练。",
+
+        // Hover Descriptions for Scenarios
+        scenario_title_daily_chat: "日常闲聊 (Coffee Chat)",
+        scenario_desc_daily_chat: "轻松日常闲聊、生活爱好、周末出游与咖啡馆闲话。",
+        scenario_title_job_interview: "求职面试 (Job Interview)",
+        scenario_desc_job_interview: "专业职场面试、过往背景、行为面试与解决问题模拟。",
+        scenario_title_ielts: "雅思口语 (IELTS Prep)",
+        scenario_desc_ielts: "雅思口语 Part 2 & 3 模拟，观点阐述与流利度深度拓展。",
+        scenario_title_travel: "出行问路 (Travel & Hotel)",
+        scenario_desc_travel: "机场出行问路、出入境柜台、酒店入住与突发沟通处理。",
+        scenario_title_tech: "技术晨会 (Tech Standup)",
+        scenario_desc_tech: "敏捷晨会同步、技术架构讨论、工程权衡与项目排期。"
     }
 };
 

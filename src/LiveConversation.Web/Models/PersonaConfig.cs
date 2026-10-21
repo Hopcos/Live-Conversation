@@ -24,4 +24,5 @@ public class ScenarioConfig
     public required string Description { get; set; }
     public required string ContextPrompt { get; set; }
     public string InitialGreeting { get; set; } = "Hello! How can I help you today?";
+    public string[] SuggestedTopics { get; set; } = [];
 }

@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     i18n.applyTranslations();
 
     function applyTheme(theme) {
-        document.body.className = `${theme} min-h-screen flex flex-col font-sans antialiased selection:bg-indigo-500 selection:text-white`;
+        document.body.className = `${theme} min-h-screen lg:h-screen lg:overflow-hidden flex flex-col font-sans antialiased selection:bg-indigo-500 selection:text-white`;
         localStorage.setItem('live_conv_theme', theme);
     }
 
@@ -20,14 +20,50 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     });
 
+    // Persona & Scenario Collapsible Panel Toggle State (默认为向上折叠)
+    const collapseBtn = document.getElementById('toggle-persona-scenario-btn');
+    const collapseContent = document.getElementById('persona-scenario-content');
+    const collapseChevron = document.getElementById('collapse-chevron');
+    const collapseToggleText = document.getElementById('collapse-toggle-text');
+    let isPersonaScenarioCollapsed = true;
+
+    function updateCollapseUi() {
+        if (!collapseContent || !collapseChevron || !collapseToggleText) return;
+        if (isPersonaScenarioCollapsed) {
+            collapseContent.classList.add('hidden');
+            collapseChevron.textContent = '▼';
+            collapseToggleText.setAttribute('data-i18n', 'collapse_expand');
+            collapseToggleText.textContent = i18n.t('collapse_expand');
+        } else {
+            collapseContent.classList.remove('hidden');
+            collapseChevron.textContent = '▲';
+            collapseToggleText.setAttribute('data-i18n', 'collapse_hide');
+            collapseToggleText.textContent = i18n.t('collapse_hide');
+        }
+    }
+
+    if (collapseBtn) {
+        collapseBtn.addEventListener('click', () => {
+            isPersonaScenarioCollapsed = !isPersonaScenarioCollapsed;
+            updateCollapseUi();
+        });
+    }
+
     const langToggleBtn = document.getElementById('lang-toggle-btn');
     if (langToggleBtn) {
         langToggleBtn.addEventListener('click', () => {
             const nextLang = i18n.currentLang === 'zh' ? 'en' : 'zh';
             i18n.setLanguage(nextLang);
             updateMicUi();
+            updateCollapseUi();
             if (state.currentPersona) {
                 updatePersonaUi(state.currentPersona);
+            }
+            if (state.currentScenario) {
+                updateScenarioUi(state.currentScenario);
+            }
+            if (typeof updateTooltipsLang === 'function') {
+                updateTooltipsLang();
             }
         });
     }
@@ -38,6 +74,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         currentScene: 'daily-chat',
         currentPersona: null,
         currentScenario: null,
+        allPersonas: [],
+        allScenarios: [],
         activeTtsProvider: 'EdgeTTS',
         mode: 'hands-free', // 'hands-free' or 'push-to-talk'
         isAiSpeaking: false,
@@ -129,10 +167,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         state.currentPersona = data.persona;
         state.currentScenario = data.scenario;
         state.activeTtsProvider = data.activeTtsProvider;
+        if (data.allPersonas) state.allPersonas = data.allPersonas;
+        if (data.allScenarios) state.allScenarios = data.allScenarios;
 
         updatePersonaUi(data.persona);
         updateScenarioUi(data.scenario);
         updateTtsBadge(state.settings.ttsProvider || data.activeTtsProvider);
+        updateTooltipsLang();
 
         if (sttLangSelect && sttLangSelect.value !== 'auto') {
             speechRecognizer.setRecognitionLanguage(sttLangSelect.value);
@@ -359,7 +400,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             </div>` : ''}
         `;
 
-        container.prepend(card);
+        container.appendChild(card);
+        scrollCoachToBottom(true);
 
         // Update badge count and highlight tab
         const badgeElem = document.getElementById('coach-tab-badge');
@@ -400,6 +442,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                     hintDiv.onclick = () => {
                         document.getElementById('tab-coach').click();
+                        setTimeout(() => {
+                            card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        }, 50);
                     };
                     innerBox.appendChild(hintDiv);
                 }
@@ -412,34 +457,76 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    function updatePersonaUi(persona) {
-        document.getElementById('persona-flag').textContent = persona.flagEmoji;
-        document.getElementById('persona-name').textContent = persona.name;
-        document.getElementById('persona-title').textContent = persona.title;
-        document.getElementById('persona-accent-badge').textContent = `${persona.countryCode} • ${persona.accentDescription}`;
-
-        // Suggested topics
+    function renderSuggestedTopics(persona, scenario) {
         const topicsContainer = document.getElementById('suggested-topics');
+        if (!topicsContainer) return;
         topicsContainer.innerHTML = '';
-        (persona.suggestedTopics || []).forEach(topic => {
+
+        const isCn = (persona?.countryCode === 'CN') || i18n.currentLang === 'zh';
+        const sceneId = scenario?.id || state.currentScene || 'daily-chat';
+
+        const scenarioTopicsMap = {
+            'daily-chat': isCn
+                ? ["☕ 周末出行与咖啡馆闲聊", "🎬 喜欢的电影与剧集", "🏡 远程办公与日常习惯", "✈️ 旅行见闻与户外爱好"]
+                : ["☕ Weekend plans and cafes", "🎬 Favorite movies & shows", "🏡 Remote work routines", "✈️ Travel and outdoor hobbies"],
+            'job-interview': isCn
+                ? ["💼 自我介绍与过往经历", "💪 我最大的优势与短板", "🤝 处理团队分歧与项目挑战", "🎯 未来五年的职业规划"]
+                : ["💼 Tell me about yourself", "💪 Greatest strength & weakness", "🤝 Handling a team conflict", "🎯 Where I see myself in 5 years"],
+            'ielts-speaking': isCn
+                ? ["🏙️ 家乡的变化与风土人情", "🌟 我最钦佩的一位榜样", "💻 远程办公的利与弊", "📚 传统教育与在线学习"]
+                : ["🏙️ Describe hometown & changes", "🌟 An inspiring person I admire", "💻 Pros & cons of remote work", "📚 Traditional vs online learning"],
+            'travel-airport': isCn
+                ? ["🎫 航班值机与行李托运", "🚪 询问登机口与安检指引", "⏰ 航班延误改签咨询", "🏨 酒店办理入住与早餐时间"]
+                : ["🎫 Flight check-in & baggage", "🚪 Asking directions to gate", "⏰ Flight delay rebooking", "🏨 Hotel check-in & breakfast"],
+            'tech-discussion': isCn
+                ? ["🚀 昨日接口与核心功能进展", "🔍 排查系统延迟与性能瓶颈", "⚙️ 微服务与单体架构权衡", "📝 代码审查与阻碍沟通"]
+                : ["🚀 Yesterday's API fixes", "🔍 Investigating latency bottleneck", "⚙️ Microservices vs monolith", "📝 Code review & blocker sync"]
+        };
+
+        const topics = scenarioTopicsMap[sceneId] || scenario?.suggestedTopics || persona?.suggestedTopics || [];
+        topics.forEach(topic => {
             const pill = document.createElement('button');
-            pill.className = 'text-xs px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700/60 transition';
+            pill.className = 'text-xs px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700/60 transition cursor-pointer hover:scale-[1.02] shadow-sm';
             pill.textContent = topic;
             pill.onclick = () => {
                 if (state.currentCountry === 'CN') {
-                    sendUserSpeech(`你好！我想和你聊聊关于${topic}的话题。`);
+                    sendUserSpeech(`你好！我想和你围绕“${topic}”展开交流。`);
                 } else {
-                    sendUserSpeech(`Let's talk about ${topic}. What are your thoughts on that?`);
+                    sendUserSpeech(`Let's discuss "${topic}". What are your thoughts on this?`);
                 }
             };
             topicsContainer.appendChild(pill);
         });
     }
 
+    function updatePersonaUi(persona) {
+        const flagEl = document.getElementById('persona-flag');
+        if (flagEl) flagEl.textContent = persona.flagEmoji;
+        document.getElementById('persona-name').textContent = persona.name;
+        document.getElementById('persona-title').textContent = persona.title;
+
+        // Keep collapsed summary header synced
+        const summaryFlag = document.getElementById('collapse-summary-flag');
+        const summaryPersona = document.getElementById('collapse-summary-persona');
+        if (summaryFlag) summaryFlag.textContent = persona.flagEmoji;
+        if (summaryPersona) summaryPersona.textContent = `${persona.name} (${persona.countryCode})`;
+
+        // Render suggested topics matching current persona & scenario
+        renderSuggestedTopics(persona, state.currentScenario);
+    }
+
     function updateScenarioUi(scenario) {
-        document.getElementById('scenario-icon').textContent = scenario.icon;
-        document.getElementById('scenario-title').textContent = scenario.title;
-        document.getElementById('scenario-desc').textContent = scenario.description;
+        const scenarioIcon = document.getElementById('scenario-icon');
+        if (scenarioIcon) scenarioIcon.textContent = scenario.icon;
+        const scenarioTitle = document.getElementById('scenario-title');
+        if (scenarioTitle) scenarioTitle.textContent = scenario.title;
+
+        // Keep collapsed summary header synced
+        const summaryScene = document.getElementById('collapse-summary-scene');
+        if (summaryScene) summaryScene.textContent = scenario.title;
+
+        // Render suggested topics matching current persona & scenario
+        renderSuggestedTopics(state.currentPersona, scenario);
     }
 
     function updateTtsBadge(provider) {
@@ -480,15 +567,152 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    function scrollToBottom() {
+    function scrollToBottom(smooth = false) {
         const stream = document.getElementById('dialogue-stream');
-        stream.scrollTop = stream.scrollHeight;
+        if (!stream) return;
+        if (smooth) {
+            stream.scrollTo({ top: stream.scrollHeight, behavior: 'smooth' });
+        } else {
+            stream.scrollTop = stream.scrollHeight;
+        }
     }
 
-    // 6. User Control Listeners
+    function scrollCoachToBottom(smooth = false) {
+        const panelCoach = document.getElementById('panel-coach');
+        if (!panelCoach) return;
+        if (smooth) {
+            panelCoach.scrollTo({ top: panelCoach.scrollHeight, behavior: 'smooth' });
+        } else {
+            panelCoach.scrollTop = panelCoach.scrollHeight;
+        }
+    }
+
+    // 6. User Control Listeners & Floating Hover Tooltips
+    const tooltipEl = document.getElementById('hover-tooltip');
+    const tooltipIcon = document.getElementById('tooltip-icon');
+    const tooltipTitle = document.getElementById('tooltip-title');
+    const tooltipDesc = document.getElementById('tooltip-desc');
+
+    function showTooltip(target, icon, title, desc) {
+        if (!tooltipEl || !title || !desc) return;
+        tooltipIcon.textContent = icon || '';
+        tooltipTitle.textContent = title;
+        tooltipDesc.textContent = desc;
+
+        tooltipEl.classList.remove('hidden');
+
+        const rect = target.getBoundingClientRect();
+        const tw = Math.min(300, window.innerWidth - 24);
+        const th = 60;
+
+        let left = rect.left + rect.width / 2 - tw / 2;
+        if (left < 12) left = 12;
+        if (left + tw > window.innerWidth - 12) {
+            left = window.innerWidth - tw - 12;
+        }
+
+        let top = rect.bottom + 8;
+        if (top + th > window.innerHeight - 12) {
+            top = Math.max(12, rect.top - th - 8);
+        }
+
+        tooltipEl.style.left = `${left}px`;
+        tooltipEl.style.top = `${top}px`;
+        tooltipEl.style.width = `${tw}px`;
+
+        requestAnimationFrame(() => {
+            tooltipEl.classList.remove('opacity-0');
+            tooltipEl.classList.add('opacity-100');
+        });
+    }
+
+    function hideTooltip() {
+        if (!tooltipEl) return;
+        tooltipEl.classList.remove('opacity-100');
+        tooltipEl.classList.add('opacity-0');
+        setTimeout(() => {
+            if (tooltipEl.classList.contains('opacity-0')) {
+                tooltipEl.classList.add('hidden');
+            }
+        }, 150);
+    }
+
+    function getPersonaTooltipInfo(countryCode) {
+        const flagMap = { 'US': '🇺🇸', 'UK': '🇬🇧', 'AU': '🇦🇺', 'IN': '🇮🇳', 'CA': '🇨🇦', 'RO': '🇷🇴', 'UA': '🇺🇦', 'CN': '🇨🇳' };
+        const nameKey = `persona_name_${countryCode}`;
+        const descKey = `persona_desc_${countryCode}`;
+
+        let title = i18n.t(nameKey);
+        let desc = i18n.t(descKey);
+
+        if (title === nameKey || desc === descKey) {
+            const persona = (state.allPersonas || []).find(p => p.countryCode === countryCode) || (state.currentPersona?.countryCode === countryCode ? state.currentPersona : null);
+            if (persona) {
+                title = `${persona.name} (${persona.countryCode})`;
+                desc = persona.accentDescription;
+            }
+        }
+        return {
+            icon: flagMap[countryCode] || '🌐',
+            title: title || countryCode,
+            desc: desc || ''
+        };
+    }
+
+    function getScenarioTooltipInfo(sceneId) {
+        const iconMap = { 'daily-chat': '☕', 'job-interview': '💼', 'ielts-speaking': '🎓', 'travel-airport': '✈️', 'tech-discussion': '💻' };
+        const keyMap = {
+            'daily-chat': 'daily_chat',
+            'job-interview': 'job_interview',
+            'ielts-speaking': 'ielts',
+            'travel-airport': 'travel',
+            'tech-discussion': 'tech'
+        };
+        const mappedKey = keyMap[sceneId] || sceneId;
+        const titleKey = `scenario_title_${mappedKey}`;
+        const descKey = `scenario_desc_${mappedKey}`;
+
+        let title = i18n.t(titleKey);
+        let desc = i18n.t(descKey);
+
+        if (title === titleKey || desc === descKey) {
+            const scenario = (state.allScenarios || []).find(s => s.id === sceneId) || (state.currentScenario?.id === sceneId ? state.currentScenario : null);
+            if (scenario) {
+                title = scenario.title;
+                desc = scenario.description;
+            }
+        }
+        return {
+            icon: iconMap[sceneId] || '💬',
+            title: title || sceneId,
+            desc: desc || ''
+        };
+    }
+
+    function updateTooltipsLang() {
+        document.querySelectorAll('.country-btn').forEach(btn => {
+            const info = getPersonaTooltipInfo(btn.dataset.country);
+            btn.setAttribute('title', `${info.title}: ${info.desc}`);
+        });
+        document.querySelectorAll('.scenario-btn').forEach(btn => {
+            const info = getScenarioTooltipInfo(btn.dataset.scene);
+            btn.setAttribute('title', `${info.title}: ${info.desc}`);
+        });
+    }
+
+    // Initialize tooltips
+    updateTooltipsLang();
+
     // Country buttons
     document.querySelectorAll('.country-btn').forEach(btn => {
+        btn.addEventListener('mouseenter', () => {
+            const info = getPersonaTooltipInfo(btn.dataset.country);
+            showTooltip(btn, info.icon, info.title, info.desc);
+        });
+        btn.addEventListener('mouseleave', hideTooltip);
+
         btn.addEventListener('click', async () => {
+            hideTooltip();
             const country = btn.dataset.country;
             if (state.currentCountry === country) return;
 
@@ -512,7 +736,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Scenario buttons
     document.querySelectorAll('.scenario-btn').forEach(btn => {
+        btn.addEventListener('mouseenter', () => {
+            const info = getScenarioTooltipInfo(btn.dataset.scene);
+            showTooltip(btn, info.icon, info.title, info.desc);
+        });
+        btn.addEventListener('mouseleave', hideTooltip);
+
         btn.addEventListener('click', async () => {
+            hideTooltip();
             const scene = btn.dataset.scene;
             if (state.currentScene === scene) return;
 
@@ -533,6 +764,29 @@ document.addEventListener('DOMContentLoaded', async () => {
             await initSession();
         });
     });
+
+    // Collapsed Summary Tooltip Listeners
+    const summaryPersona = document.getElementById('collapse-summary-persona');
+    if (summaryPersona) {
+        summaryPersona.classList.add('cursor-help');
+        summaryPersona.addEventListener('mouseenter', () => {
+            const country = state.currentCountry || state.currentPersona?.countryCode || 'US';
+            const info = getPersonaTooltipInfo(country);
+            showTooltip(summaryPersona, info.icon, info.title, info.desc);
+        });
+        summaryPersona.addEventListener('mouseleave', hideTooltip);
+    }
+
+    const summaryScene = document.getElementById('collapse-summary-scene');
+    if (summaryScene) {
+        summaryScene.classList.add('cursor-help');
+        summaryScene.addEventListener('mouseenter', () => {
+            const sceneId = state.currentScene || state.currentScenario?.id || 'daily-chat';
+            const info = getScenarioTooltipInfo(sceneId);
+            showTooltip(summaryScene, info.icon, info.title, info.desc);
+        });
+        summaryScene.addEventListener('mouseleave', hideTooltip);
+    }
 
     // Mode Selector (Hands-Free vs Push-To-Talk)
     document.getElementById('mode-hands-free').addEventListener('click', () => {
@@ -633,6 +887,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('tab-dialogue').classList.remove('border-transparent', 'text-slate-400');
         document.getElementById('tab-coach').classList.remove('border-indigo-500', 'text-indigo-400');
         document.getElementById('tab-coach').classList.add('border-transparent', 'text-slate-400');
+        scrollToBottom(false);
     });
 
     document.getElementById('tab-coach').addEventListener('click', () => {
@@ -642,6 +897,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('tab-coach').classList.remove('border-transparent', 'text-slate-400');
         document.getElementById('tab-dialogue').classList.remove('border-indigo-500', 'text-indigo-400');
         document.getElementById('tab-dialogue').classList.add('border-transparent', 'text-slate-400');
+        scrollCoachToBottom(false);
     });
 
     // Settings Modal

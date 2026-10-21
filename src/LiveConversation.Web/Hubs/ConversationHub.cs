@@ -66,11 +66,13 @@ public class ConversationHub : Hub
         {
             Persona = persona,
             Scenario = scenario,
+            AllPersonas = PersonaRegistry.Personas,
+            AllScenarios = PersonaRegistry.Scenarios,
             ActiveTtsProvider = settings?.TtsProvider ?? "EdgeTTS"
         });
 
-        // Synthesize initial greeting with persona's regional spoken flavor
-        var greeting = persona.InitialGreeting ?? scenario.InitialGreeting;
+        // Synthesize scenario greeting with persona's regional spoken flavor
+        var greeting = PersonaRegistry.GetScenarioGreeting(persona, scenario);
         history.Add(new SimpleChatMessage("assistant", greeting));
 
         await Clients.Caller.SendAsync("ReceiveTextChunk", greeting);
@@ -180,15 +182,29 @@ public class ConversationHub : Hub
         try
         {
             var systemPrompt = $"""
-                {persona.SystemPrompt}
-                Scenario: {scenario.ContextPrompt}
+                === ROLEPLAY SCENARIO DIRECTIVE ===
+                You are currently roleplaying in the following scenario:
+                SCENARIO: [{scenario.Title}]
+                SCENARIO SETTING & CONTEXT:
+                {scenario.ContextPrompt}
                 
-                ORAL CONVERSATION & ACCENT GUIDELINES:
-                - Embody your persona's spoken dialect and regional oral accent habits ({persona.AccentDescription}) authentically.
-                - You MUST naturally incorporate your persona's distinct regional oral vocabulary, idioms, contractions, and spoken pacing in EVERY turn.
-                - Keep your turns strictly within 1 to 3 spoken sentences so the learner has ample opportunity to practice.
-                - End with a friendly, natural follow-up question.
-                - NEVER output markdown formatting (like asterisks, bolding, bullet points), emojis, or parenthetical cues. Output ONLY direct spoken words.
+                YOUR ACTIVE ROLE IN THIS SCENARIO:
+                - If [{scenario.Id}] is 'job-interview': You are an experienced, professional job interviewer. Conduct a realistic job interview. Ask ONE focused behavioral or technical question at a time. Evaluate the user's responses, ask follow-up questions, and guide the interview.
+                - If [{scenario.Id}] is 'ielts-speaking': You are an official IELTS Speaking Examiner. Strictly adhere to IELTS criteria (fluency, coherence, lexical resource, grammatical range). Probe with Part 1, Part 2, or Part 3 examiner questions.
+                - If [{scenario.Id}] is 'travel-airport': You are an airline gate agent, immigration officer, or hotel concierge. Assist the user with check-in, tickets, directions, or travel dilemmas realistically.
+                - If [{scenario.Id}] is 'tech-discussion': You are a senior software engineering teammate / tech lead in an agile daily standup. Discuss code, PRs, architecture trade-offs, sprint progress, and blockers.
+                - If [{scenario.Id}] is 'daily-chat': You are a relaxed, friendly conversational partner chatting over coffee about life, hobbies, and weekend plans.
+                
+                === PERSONA & REGIONAL ACCENT IDENTITY ===
+                You are {persona.Name}, {persona.Title}.
+                {persona.SystemPrompt}
+                
+                === MANDATORY ACCENT & SPOKEN RULES ===
+                1. STAY DEEPLY IN YOUR SCENARIO ROLE ({scenario.Title}) in every single turn.
+                2. AUTHENTIC REGIONAL ORAL ACCENT: Express all speech with {persona.Name}'s native regional accent markers, dialect vocabulary, contractions, and natural cadence ({persona.AccentDescription}).
+                3. CONCISE ORAL TURNS: Keep responses strictly between 1 to 3 spoken sentences so the learner has maximum speaking time.
+                4. CONVERSATIONAL QUESTION: Always end your turn with a relevant, engaging question advancing the scenario.
+                5. PURE SPOKEN DIALOGUE ONLY: Output ONLY direct spoken words. Absolutely NO markdown formatting (*, **, #), NO bullet points, NO emojis, and NO parenthetical cues/stage directions.
                 """;
 
             var segmenter = new SentenceSegmenter();

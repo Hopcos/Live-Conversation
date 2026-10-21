@@ -69,4 +69,25 @@ public class PersonaRegistryTests
         Assert.Equal(expectedTitle, scenario.Title);
         Assert.False(string.IsNullOrWhiteSpace(scenario.InitialGreeting));
     }
+
+    [Fact]
+    public void GetScenarioGreeting_DifferentScenarios_ReturnDistinctGreetingsForSamePersona()
+    {
+        var persona = PersonaRegistry.GetPersona("US");
+        var chatScenario = PersonaRegistry.GetScenario("daily-chat");
+        var interviewScenario = PersonaRegistry.GetScenario("job-interview");
+        var ieltsScenario = PersonaRegistry.GetScenario("ielts-speaking");
+
+        var chatGreeting = PersonaRegistry.GetScenarioGreeting(persona, chatScenario);
+        var interviewGreeting = PersonaRegistry.GetScenarioGreeting(persona, interviewScenario);
+        var ieltsGreeting = PersonaRegistry.GetScenarioGreeting(persona, ieltsScenario);
+
+        Assert.NotEmpty(chatGreeting);
+        Assert.NotEmpty(interviewGreeting);
+        Assert.NotEmpty(ieltsGreeting);
+        Assert.NotEqual(chatGreeting, interviewGreeting);
+        Assert.NotEqual(interviewGreeting, ieltsGreeting);
+        Assert.Contains("interview", interviewGreeting, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("IELTS", ieltsGreeting, StringComparison.OrdinalIgnoreCase);
+    }
 }
