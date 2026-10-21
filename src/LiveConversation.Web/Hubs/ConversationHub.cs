@@ -15,6 +15,7 @@ public class ConversationHub : Hub
     private readonly ILlmService _llmService;
     private readonly ICoachService _coachService;
     private readonly TtsProviderFactory _ttsFactory;
+    private readonly ISttService _sttService;
     private readonly AppSettings _appSettings;
     private readonly IHubContext<ConversationHub> _hubContext;
     private readonly ILogger<ConversationHub> _logger;
@@ -27,6 +28,7 @@ public class ConversationHub : Hub
         ILlmService llmService,
         ICoachService coachService,
         TtsProviderFactory ttsFactory,
+        ISttService sttService,
         IOptions<AppSettings> appSettings,
         IHubContext<ConversationHub> hubContext,
         ILogger<ConversationHub> logger)
@@ -34,6 +36,7 @@ public class ConversationHub : Hub
         _llmService = llmService;
         _coachService = coachService;
         _ttsFactory = ttsFactory;
+        _sttService = sttService;
         _appSettings = appSettings.Value;
         _hubContext = hubContext;
         _logger = logger;
@@ -68,7 +71,8 @@ public class ConversationHub : Hub
             Scenario = scenario,
             AllPersonas = PersonaRegistry.Personas,
             AllScenarios = PersonaRegistry.Scenarios,
-            ActiveTtsProvider = settings?.TtsProvider ?? "EdgeTTS"
+            ActiveTtsProvider = settings?.TtsProvider ?? "EdgeTTS",
+            ActiveSttProvider = settings?.SttProvider ?? "WebSpeech"
         });
 
         // Synthesize scenario greeting with persona's regional spoken flavor
@@ -148,6 +152,63 @@ public class ConversationHub : Hub
         ActiveTokens[connectionId] = cts;
         var ct = cts.Token;
 
+        await ExecuteUserTurnAsync(userText, countryCode, sceneId, settings, connectionId, ct);
+    }
+
+    /// <summary>
+    /// User sends recorded audio (e.g. from Whisper mode).
+    /// Audio is transcribed via Whisper STT and then fed into the conversation & coaching pipeline.
+    /// </summary>
+    public async Task SendUserAudio(string audioBase64, string mimeType, string countryCode, string sceneId, ClientSettings? settings)
+    {
+        if (string.IsNullOrWhiteSpace(audioBase64)) return;
+
+        var connectionId = Context.ConnectionId;
+        CancelActiveTask(connectionId);
+
+        var cts = new CancellationTokenSource();
+        ActiveTokens[connectionId] = cts;
+        var ct = cts.Token;
+
+        try
+        {
+            var audioBytes = Convert.FromBase64String(audioBase64);
+            var extension = mimeType.Contains("wav", StringComparison.OrdinalIgnoreCase) ? "wav" 
+                : (mimeType.Contains("mp4", StringComparison.OrdinalIgnoreCase) ? "m4a" : "webm");
+            var fileName = $"user_audio_{Guid.NewGuid():N}.{extension}";
+
+            var userText = await _sttService.TranscribeAsync(audioBytes, fileName, settings, settings?.SttLanguage, ct);
+            if (string.IsNullOrWhiteSpace(userText))
+            {
+                await Clients.Caller.SendAsync("ReceiveUserTranscript", string.Empty);
+                return;
+            }
+
+            // Broadcast recognized text to client so it renders the user message bubble
+            await Clients.Caller.SendAsync("ReceiveUserTranscript", userText);
+
+            // Execute conversation pipeline
+            await ExecuteUserTurnAsync(userText, countryCode, sceneId, settings, connectionId, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogInformation("Whisper turn for {ConnectionId} was interrupted by user.", connectionId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error processing audio STT turn: {Message}", ex.Message);
+            await Clients.Caller.SendAsync("ReceiveError", $"Whisper STT Error: {ex.Message}");
+        }
+    }
+
+    private async Task ExecuteUserTurnAsync(
+        string userText, 
+        string countryCode, 
+        string sceneId, 
+        ClientSettings? settings, 
+        string connectionId, 
+        CancellationToken ct)
+    {
         var persona = PersonaRegistry.GetPersona(countryCode);
         var scenario = PersonaRegistry.GetScenario(sceneId);
 

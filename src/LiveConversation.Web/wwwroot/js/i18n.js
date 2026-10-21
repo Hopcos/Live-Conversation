@@ -43,9 +43,43 @@ const I18N_DICTIONARY = {
         tab_dialogue: "💬 Live Dialogue",
         tab_coach: "🧠 AI Shadow Coach",
         coach_empty_text: "Start speaking! The Shadow Coach will automatically analyze your grammar, vocabulary, and suggest native expressions here in real time.",
-        settings_modal_title: "Engine & Voice Settings",
+        
+        // Settings Modal Tabs & Titles
+        settings_modal_title: "Engine & Model Settings",
+        settings_tab_tts: "🔊 Voice (TTS)",
+        settings_tab_stt: "🎙️ Speech (STT)",
+        settings_tab_llm: "🤖 Model (LLM)",
+        settings_tab_pref: "⚡ Speed & Test",
+        cancel_btn: "Cancel",
+
         tts_engine_label: "TTS Voice Engine (Speech Synthesis)",
         tts_engine_tip: "💡 When ElevenLabs quota runs out, switch anytime to Web Speech (browser-native, zero keys, 100% stable regional accents) or OpenAI TTS.",
+        tts_opt_elevenlabs: "ElevenLabs (High-Fidelity Dedicated Voice, Recommended)",
+        tts_opt_webspeech: "Browser Native (Web Speech - Multilingual, Zero Latency, Free)",
+        tts_opt_openai: "OpenAI TTS (Official & Compatible Speech Synthesis)",
+        tts_opt_edgetts: "Microsoft Edge-TTS (Cloud Neural Voice)",
+
+        stt_engine_label: "STT Speech Recognition Engine",
+        stt_engine_tip: "💡 Web Speech API: Free, browser-native, zero server latency. Whisper API: High precision transcription, excellent for code-switching and accents.",
+        stt_opt_webspeech: "Browser Native (Web Speech - Free, Zero Latency, Multi-accent)",
+        stt_opt_whisper: "Whisper API (SOTA Accuracy, Mixed Code-Switching, Groq/OpenAI)",
+
+        whisper_endpoint_label: "Whisper API Base URL (Optional - defaults to LLM URL if empty)",
+        whisper_key_label: "Whisper API Key (Optional - defaults to LLM Key if empty)",
+        whisper_model_label: "Whisper Model Name",
+        whisper_transcribing: "🎙️ Whisper is transcribing your speech...",
+        stt_lang_auto_webspeech: "🌐 STT: Auto (Persona)",
+        stt_lang_auto_whisper: "🎙️ Whisper: Auto Adaptive",
+
+        placeholder_elevenlabs_key: "xi-api-key (optional when using EdgeTTS/WebSpeech)",
+        placeholder_elevenlabs_model: "eleven_multilingual_v2 (or eleven_turbo_v2_5)",
+        placeholder_whisper_endpoint: "https://api.groq.com/openai/v1 (or https://api.openai.com/v1)",
+        placeholder_whisper_key: "gsk_... / sk-... (Leave empty to inherit LLM Key)",
+        placeholder_whisper_model: "whisper-large-v3-turbo (or whisper-large-v3, whisper-1)",
+        placeholder_llm_endpoint: "http://127.0.0.1:5055/v1 (or https://api.openai.com/v1)",
+        placeholder_llm_key: "sk-... (Chat completion API Key)",
+        placeholder_llm_model: "gemini-2.5-flash-lite (or gpt-4o-mini, deepseek-chat)",
+
         elevenlabs_key_label: "ElevenLabs API Key",
         elevenlabs_model_label: "ElevenLabs Model ID",
         llm_endpoint_label: "LLM API Base URL (OpenAI / DeepSeek / Local)",
@@ -59,10 +93,19 @@ const I18N_DICTIONARY = {
         save_changes_btn: "Save Changes",
         you: "You",
         replay_btn: "🔊 Replay (0.8x)",
+        replay_loading: "⏳ Playing...",
+        
+        // Coach Cards and Live Dialogue Feedback
         coach_correction: "Correction:",
         coach_native: "Native Phrasing:",
         coach_explanation: "💡 Explanation:",
         coach_spotlight: "🌟 Key Phrase:",
+        coach_hint_label: "💡 Coach Suggestion:",
+        coach_hint_switch: "👉 Click to switch to AI Shadow Coach for in-depth analysis",
+        coach_hint_praise: "✨ Natural and fluent! Recommended phrasing:",
+        coach_notification_detected: "💡 AI Shadow Coach: Coaching suggestion detected, new feedback card generated!",
+        coach_badge_needs_polish: "Needs Polish",
+        coach_badge_natural: "Natural & Clear",
         partner_badge: "AI Partner",
         current_scenario_prefix: "Scenario:",
 
@@ -136,9 +179,43 @@ const I18N_DICTIONARY = {
         tab_dialogue: "💬 实时对话记录",
         tab_coach: "🧠 AI 影子伴学校对",
         coach_empty_text: "请开口交流！AI 影子教练将在后台实时分析您的每句发音与句式，在此输出时态纠偏、地道替换词及中文深度解析。",
+        
+        // Settings Modal Tabs & Titles
         settings_modal_title: "语音引擎与模型配置",
+        settings_tab_tts: "🔊 TTS 语音合成",
+        settings_tab_stt: "🎙️ STT 语音识别",
+        settings_tab_llm: "🤖 LLM 对话模型",
+        settings_tab_pref: "⚡ 语速与试听",
+        cancel_btn: "取消",
+
         tts_engine_label: "TTS 语音合成引擎",
         tts_engine_tip: "💡 即使 ElevenLabs 额度耗尽，可随时切换为【浏览器原生语音 (Web Speech)】，免任何密钥和配置，即享多国地道母语口音。",
+        tts_opt_elevenlabs: "ElevenLabs (高保真专属声线，强力推荐)",
+        tts_opt_webspeech: "浏览器原生语音 (Web Speech - 多国原生口音、零延迟、免Key、100%稳定)",
+        tts_opt_openai: "OpenAI TTS (官方/兼容接口语音合成)",
+        tts_opt_edgetts: "Microsoft Edge-TTS (微软云端神经语音)",
+
+        stt_engine_label: "STT 语音识别引擎",
+        stt_engine_tip: "💡 浏览器原生 Web Speech API：免密钥配置、零服务端延迟；Whisper API：业内最高识别精度、支持中英夹杂与弱网络/多口音精准转写。",
+        stt_opt_webspeech: "浏览器原生语音 (Web Speech - 免配置、零延迟、多语种)",
+        stt_opt_whisper: "Whisper API (高精度多语种识别、中英自适应、支持自建/中转/Groq)",
+
+        whisper_endpoint_label: "Whisper API 端点地址 (选填，留空默认复用 LLM 端点)",
+        whisper_key_label: "Whisper API Key 密钥 (选填，留空默认复用 LLM Key)",
+        whisper_model_label: "Whisper 模型代号 (Model ID)",
+        whisper_transcribing: "🎙️ Whisper 正在精准识别您的语音...",
+        stt_lang_auto_webspeech: "🌐 STT: 自动匹配角色",
+        stt_lang_auto_whisper: "🎙️ Whisper: 智能自适应",
+
+        placeholder_elevenlabs_key: "xi-api-key (使用EdgeTTS或WebSpeech时可选填)",
+        placeholder_elevenlabs_model: "eleven_multilingual_v2 (或 eleven_turbo_v2_5)",
+        placeholder_whisper_endpoint: "https://api.groq.com/openai/v1 (或 https://api.openai.com/v1)",
+        placeholder_whisper_key: "gsk_... / sk-... (留空默认复用 LLM Key)",
+        placeholder_whisper_model: "whisper-large-v3-turbo (或 whisper-large-v3, whisper-1)",
+        placeholder_llm_endpoint: "http://127.0.0.1:5055/v1 (或 https://api.openai.com/v1)",
+        placeholder_llm_key: "sk-... (模型对话 API Key 密钥)",
+        placeholder_llm_model: "gemini-2.5-flash-lite (或 gpt-4o-mini, deepseek-chat)",
+
         elevenlabs_key_label: "ElevenLabs API 密钥",
         elevenlabs_model_label: "ElevenLabs 模型代号 (Model ID)",
         llm_endpoint_label: "LLM API 端点地址 (支持 OpenAI / DeepSeek / 本地网关)",
@@ -152,10 +229,19 @@ const I18N_DICTIONARY = {
         save_changes_btn: "保存设置",
         you: "你",
         replay_btn: "🔊 慢速复读 (0.8x)",
+        replay_loading: "⏳ 正在复读...",
+
+        // Coach Cards and Live Dialogue Feedback
         coach_correction: "语法修正：",
         coach_native: "母语级地道表达：",
         coach_explanation: "💡 深度解析：",
         coach_spotlight: "🌟 亮点习语：",
+        coach_hint_label: "💡 纠偏建议:",
+        coach_hint_switch: "👉 点击切换到右侧【AI 影子伴学】查看深度解析",
+        coach_hint_praise: "✨ 表达规范地道！地道推荐:",
+        coach_notification_detected: "💡 AI 影子伴学：检测到语法建议，已生成纠偏卡片！",
+        coach_badge_needs_polish: "待润色提高",
+        coach_badge_natural: "表达自然地道",
         partner_badge: "AI 陪练伙伴",
         current_scenario_prefix: "实战场景：",
 
@@ -212,11 +298,23 @@ class I18nManager {
         document.querySelectorAll('[data-i18n]').forEach(el => {
             const key = el.getAttribute('data-i18n');
             const translation = this.t(key);
-            if (el.tagName === 'INPUT' && el.type === 'text') {
+            if (el.tagName === 'INPUT' && (el.type === 'text' || el.type === 'password')) {
                 el.placeholder = translation;
+            } else if (el.tagName === 'OPTION') {
+                el.textContent = translation;
             } else {
                 el.textContent = translation;
             }
+        });
+
+        document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+            const key = el.getAttribute('data-i18n-placeholder');
+            el.placeholder = this.t(key);
+        });
+
+        document.querySelectorAll('[data-i18n-title]').forEach(el => {
+            const key = el.getAttribute('data-i18n-title');
+            el.title = this.t(key);
         });
 
         // Update active language indicator in header

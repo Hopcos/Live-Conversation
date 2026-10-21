@@ -53,19 +53,24 @@
 
         <div class="flex items-center space-x-2 md:space-x-3">
             <!-- Theme Switcher -->
-            <div class="flex items-center space-x-1 bg-slate-800 border border-slate-700/60 rounded-lg p-0.5 text-xs" title="Theme Switcher">
-                <button class="theme-btn px-1.5 py-0.5 rounded hover:bg-slate-700 transition" data-theme="theme-cosmic" title="Cosmic Dark">🌌</button>
-                <button class="theme-btn px-1.5 py-0.5 rounded hover:bg-slate-700 transition" data-theme="theme-emerald" title="Cyber Emerald">🌲</button>
-                <button class="theme-btn px-1.5 py-0.5 rounded hover:bg-slate-700 transition" data-theme="theme-amethyst" title="Midnight Purple">🌆</button>
-                <button class="theme-btn px-1.5 py-0.5 rounded hover:bg-slate-700 transition" data-theme="theme-light" title="Modern Light">☀️</button>
+            <div class="flex items-center space-x-1 bg-slate-800 border border-slate-700/60 rounded-lg p-0.5 text-xs" data-i18n-title="theme_title" title="Theme Switcher">
+                <button class="theme-btn px-1.5 py-0.5 rounded hover:bg-slate-700 transition" data-theme="theme-cosmic" data-i18n-title="theme_cosmic" title="Cosmic Dark">🌌</button>
+                <button class="theme-btn px-1.5 py-0.5 rounded hover:bg-slate-700 transition" data-theme="theme-emerald" data-i18n-title="theme_emerald" title="Cyber Emerald">🌲</button>
+                <button class="theme-btn px-1.5 py-0.5 rounded hover:bg-slate-700 transition" data-theme="theme-amethyst" data-i18n-title="theme_amethyst" title="Midnight Purple">🌆</button>
+                <button class="theme-btn px-1.5 py-0.5 rounded hover:bg-slate-700 transition" data-theme="theme-light" data-i18n-title="theme_light" title="Modern Light">☀️</button>
             </div>
 
-            <!-- Recognition Language (STT) Selector -->
-            <select id="stt-lang-select" class="bg-slate-800 border border-slate-700/60 text-slate-300 text-xs rounded-lg px-2 py-1 focus:outline-none hidden sm:inline-block">
-                <option value="auto">🌐 STT: Auto</option>
-                <option value="en-US">🇺🇸 STT: English</option>
-                <option value="zh-CN">🇨🇳 STT: 中文 (Mandarin)</option>
-            </select>
+            <!-- Recognition Language (STT) Selector & Active STT Indicator -->
+            <div id="stt-header-container" class="items-center space-x-1.5 hidden sm:inline-flex">
+                <select id="stt-lang-select" class="bg-slate-800 border border-slate-700/60 text-slate-300 text-xs rounded-lg px-2 py-1 focus:outline-none">
+                    <option value="auto" data-i18n="input_lang_auto">🌐 STT: Auto</option>
+                    <option value="en-US" data-i18n="input_lang_en">🇺🇸 STT: English</option>
+                    <option value="zh-CN" data-i18n="input_lang_zh">🇨🇳 STT: 中文 (Mandarin)</option>
+                </select>
+                <div id="active-stt-badge" class="text-[11px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 hidden font-medium">
+                    🎙️ Whisper
+                </div>
+            </div>
 
             <!-- Language Switcher (i18n) -->
             <button id="lang-toggle-btn" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/60 text-xs font-medium transition">
@@ -312,98 +317,195 @@
 
     <!-- Settings Modal -->
     <div id="settings-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-        <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full p-6 shadow-2xl animate-fade-in max-h-[90vh] overflow-y-auto">
+        <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-xl w-full p-6 shadow-2xl animate-fade-in max-h-[92vh] flex flex-col">
             
-            <div class="flex items-center justify-between pb-4 border-b border-slate-800 mb-5">
-                <div class="flex items-center space-x-2">
-                    <span class="text-xl">⚙️</span>
-                    <h3 class="text-lg font-bold text-white" data-i18n="settings_modal_title">Engine & Voice Settings</h3>
+            <!-- Modal Header -->
+            <div class="flex items-center justify-between pb-3.5 border-b border-slate-800 mb-4 flex-none">
+                <div class="flex items-center space-x-2.5">
+                    <div class="w-8 h-8 rounded-xl bg-indigo-600/20 text-indigo-400 flex items-center justify-center text-base border border-indigo-500/30">
+                        ⚙️
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-white tracking-tight" data-i18n="settings_modal_title">Engine & Model Settings</h3>
+                    </div>
                 </div>
-                <button id="close-settings-btn" class="text-slate-400 hover:text-white text-lg">✕</button>
+                <button id="close-settings-btn" class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 transition text-base">✕</button>
             </div>
 
-            <form id="settings-form" autocomplete="off" onsubmit="return false;" class="space-y-5 text-sm">
+            <!-- Segmented Category Tab Bar -->
+            <div class="flex items-center space-x-1 p-1 bg-slate-950/60 rounded-xl border border-slate-800/80 mb-4 text-xs font-medium flex-none">
+                <button type="button" class="settings-tab-btn flex-1 py-1.5 px-2 rounded-lg transition text-center active bg-indigo-600 text-white shadow-sm" data-tab="tab-content-tts" data-i18n="settings_tab_tts">
+                    🔊 TTS Voice
+                </button>
+                <button type="button" class="settings-tab-btn flex-1 py-1.5 px-2 rounded-lg transition text-center text-slate-400 hover:text-slate-200" data-tab="tab-content-stt" data-i18n="settings_tab_stt">
+                    🎙️ STT Speech
+                </button>
+                <button type="button" class="settings-tab-btn flex-1 py-1.5 px-2 rounded-lg transition text-center text-slate-400 hover:text-slate-200" data-tab="tab-content-llm" data-i18n="settings_tab_llm">
+                    🤖 LLM Model
+                </button>
+                <button type="button" class="settings-tab-btn flex-1 py-1.5 px-2 rounded-lg transition text-center text-slate-400 hover:text-slate-200" data-tab="tab-content-pref" data-i18n="settings_tab_pref">
+                    ⚡ Speed & Test
+                </button>
+            </div>
+
+            <!-- Form Content Container (Scrollable) -->
+            <form id="settings-form" autocomplete="off" onsubmit="return false;" class="space-y-4 text-sm flex-1 overflow-y-auto pr-1">
                 
-                <!-- TTS Engine Selection (Key Anti-Lock-in Feature) -->
-                <div>
-                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5" data-i18n="tts_engine_label">
-                        TTS Voice Engine (语音合成引擎)
-                    </label>
-                    <select id="settings-tts-provider" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500">
-                        <option value="ElevenLabs">ElevenLabs (高保真专属声线，强力推荐)</option>
-                        <option value="WebSpeech">浏览器原生语音 (Web Speech - 多国原生口音、零延迟、免Key、100%稳定)</option>
-                        <option value="OpenAITTS">OpenAI TTS (官方/兼容接口语音合成)</option>
-                        <option value="EdgeTTS">Microsoft Edge-TTS (微软云端神经语音)</option>
-                    </select>
-                    <p class="text-[11px] text-slate-500 mt-1" data-i18n="tts_engine_tip">
-                        💡 即使 ElevenLabs 额度耗尽，可随时一键切换为【浏览器原生语音 (Web Speech)】，免任何密钥和配置，即享多国地道母语口音。
-                    </p>
-                </div>
-
-                <!-- ElevenLabs API Key & Model -->
-                <div class="space-y-3">
+                <!-- TAB 1: TTS VOICE ENGINE -->
+                <div id="tab-content-tts" class="settings-tab-pane space-y-3.5">
                     <div>
-                        <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5" data-i18n="elevenlabs_key_label">
-                            ElevenLabs API Key (Optional when using EdgeTTS)
+                        <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5" data-i18n="tts_engine_label">
+                            TTS Voice Engine (语音合成引擎)
                         </label>
-                        <input id="settings-elevenlabs-key" type="password" autocomplete="off" placeholder="xi-api-key..." class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500 font-mono text-xs">
+                        <select id="settings-tts-provider" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500 text-xs">
+                            <option value="ElevenLabs" data-i18n="tts_opt_elevenlabs">ElevenLabs (高保真专属声线，强力推荐)</option>
+                            <option value="WebSpeech" data-i18n="tts_opt_webspeech">浏览器原生语音 (Web Speech - 多国原生口音、零延迟、免Key、100%稳定)</option>
+                            <option value="OpenAITTS" data-i18n="tts_opt_openai">OpenAI TTS (官方/兼容接口语音合成)</option>
+                            <option value="EdgeTTS" data-i18n="tts_opt_edgetts">Microsoft Edge-TTS (微软云端神经语音)</option>
+                        </select>
+                        <p class="text-[11px] text-slate-500 mt-1 leading-relaxed" data-i18n="tts_engine_tip">
+                            💡 即使 ElevenLabs 额度耗尽，可随时切换为【浏览器原生语音 (Web Speech)】，免任何密钥和配置，即享多国地道母语口音。
+                        </p>
+                    </div>
+
+                    <!-- ElevenLabs Config -->
+                    <div id="elevenlabs-config-container" class="space-y-3 p-3 rounded-2xl bg-slate-800/40 border border-slate-700/60">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1" data-i18n="elevenlabs_key_label">
+                                ElevenLabs API Key
+                            </label>
+                            <input id="settings-elevenlabs-key" type="password" autocomplete="off" data-i18n-placeholder="placeholder_elevenlabs_key" placeholder="xi-api-key..." class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500 font-mono text-xs">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1" data-i18n="elevenlabs_model_label">
+                                ElevenLabs Model ID
+                            </label>
+                            <input id="settings-elevenlabs-model" type="text" data-i18n-placeholder="placeholder_elevenlabs_model" placeholder="eleven_multilingual_v2" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500 font-mono text-xs">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 2: STT SPEECH RECOGNITION -->
+                <div id="tab-content-stt" class="settings-tab-pane space-y-3.5 hidden">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5" data-i18n="stt_engine_label">
+                            STT Speech Recognition Engine (语音识别引擎)
+                        </label>
+                        <select id="settings-stt-provider" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500 text-xs">
+                            <option value="WebSpeech" data-i18n="stt_opt_webspeech">浏览器原生语音 (Web Speech - 免配置、零延迟、多语种)</option>
+                            <option value="Whisper" data-i18n="stt_opt_whisper">Whisper API (高精度多语种识别、中英自适应、支持自建/中转/Groq)</option>
+                        </select>
+                        <p class="text-[11px] text-slate-500 mt-1 leading-relaxed" data-i18n="stt_engine_tip">
+                            💡 浏览器原生 Web Speech API：免密钥配置、零服务端延迟；Whisper API：业内最高识别精度、支持中英夹杂与弱网络/多口音精准转写。
+                        </p>
+                    </div>
+
+                    <!-- Whisper Interface Configuration -->
+                    <div id="whisper-config-container" class="space-y-3 p-3 rounded-2xl bg-slate-800/40 border border-slate-700/60 hidden">
+                        <div>
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider" data-i18n="whisper_endpoint_label">
+                                    Whisper API Base URL
+                                </label>
+                                <div class="flex space-x-1">
+                                    <button type="button" class="quick-chip text-[10px] px-1.5 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-indigo-300" data-target="settings-whisper-endpoint" data-val="https://api.groq.com/openai/v1">Groq</button>
+                                    <button type="button" class="quick-chip text-[10px] px-1.5 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-indigo-300" data-target="settings-whisper-endpoint" data-val="https://api.openai.com/v1">OpenAI</button>
+                                </div>
+                            </div>
+                            <input id="settings-whisper-endpoint" type="text" data-i18n-placeholder="placeholder_whisper_endpoint" placeholder="https://api.groq.com/openai/v1" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500 font-mono text-xs">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1" data-i18n="whisper_key_label">
+                                Whisper API Key
+                            </label>
+                            <input id="settings-whisper-key" type="password" autocomplete="off" data-i18n-placeholder="placeholder_whisper_key" placeholder="gsk_... / sk-... (Leave empty to inherit LLM Key)" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500 font-mono text-xs">
+                        </div>
+
+                        <div>
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider" data-i18n="whisper_model_label">
+                                    Whisper Model ID
+                                </label>
+                                <div class="flex space-x-1">
+                                    <button type="button" class="quick-chip text-[10px] px-1.5 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-indigo-300" data-target="settings-whisper-model" data-val="whisper-large-v3-turbo">turbo</button>
+                                    <button type="button" class="quick-chip text-[10px] px-1.5 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-indigo-300" data-target="settings-whisper-model" data-val="whisper-large-v3">v3</button>
+                                    <button type="button" class="quick-chip text-[10px] px-1.5 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-indigo-300" data-target="settings-whisper-model" data-val="whisper-1">whisper-1</button>
+                                </div>
+                            </div>
+                            <input id="settings-whisper-model" type="text" data-i18n-placeholder="placeholder_whisper_model" placeholder="whisper-large-v3-turbo" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500 font-mono text-xs">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 3: LLM CHAT MODEL -->
+                <div id="tab-content-llm" class="settings-tab-pane space-y-3.5 hidden">
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider" data-i18n="llm_endpoint_label">
+                                LLM API Base URL
+                            </label>
+                            <div class="flex space-x-1">
+                                <button type="button" class="quick-chip text-[10px] px-1.5 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-indigo-300" data-target="settings-llm-endpoint" data-val="http://127.0.0.1:5055/v1">Local</button>
+                                <button type="button" class="quick-chip text-[10px] px-1.5 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-indigo-300" data-target="settings-llm-endpoint" data-val="https://api.openai.com/v1">OpenAI</button>
+                            </div>
+                        </div>
+                        <input id="settings-llm-endpoint" type="text" data-i18n-placeholder="placeholder_llm_endpoint" placeholder="http://127.0.0.1:5055/v1" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500 font-mono text-xs">
                     </div>
 
                     <div>
-                        <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5" data-i18n="elevenlabs_model_label">
-                            ElevenLabs Model ID
+                        <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1" data-i18n="llm_key_label">
+                            LLM API Key
                         </label>
-                        <input id="settings-elevenlabs-model" type="text" placeholder="eleven_multilingual_v2 (or eleven_turbo_v2_5)" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500 font-mono text-xs">
+                        <input id="settings-llm-key" type="password" autocomplete="off" data-i18n-placeholder="placeholder_llm_key" placeholder="sk-..." class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500 font-mono text-xs">
+                    </div>
+
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider" data-i18n="llm_model_label">
+                                LLM Model Name
+                            </label>
+                            <div class="flex space-x-1">
+                                <button type="button" class="quick-chip text-[10px] px-1.5 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-indigo-300" data-target="settings-llm-model" data-val="gemini-2.5-flash-lite">gemini</button>
+                                <button type="button" class="quick-chip text-[10px] px-1.5 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-indigo-300" data-target="settings-llm-model" data-val="gpt-4o-mini">gpt-4o</button>
+                                <button type="button" class="quick-chip text-[10px] px-1.5 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-indigo-300" data-target="settings-llm-model" data-val="deepseek-chat">deepseek</button>
+                            </div>
+                        </div>
+                        <input id="settings-llm-model" type="text" data-i18n-placeholder="placeholder_llm_model" placeholder="gemini-2.5-flash-lite" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500 font-mono text-xs">
                     </div>
                 </div>
 
-                <div class="border-t border-slate-800/80 pt-4"></div>
-
-                <!-- LLM Provider & Key -->
-                <div>
-                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5" data-i18n="llm_endpoint_label">
-                        LLM API Base URL (OpenAI / DeepSeek / Compatible)
-                    </label>
-                    <input id="settings-llm-endpoint" type="text" placeholder="https://api.openai.com/v1" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500 font-mono text-xs mb-3">
-
-                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5" data-i18n="llm_key_label">
-                        LLM API Key
-                    </label>
-                    <input id="settings-llm-key" type="password" autocomplete="off" placeholder="sk-..." class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500 font-mono text-xs mb-3">
-
-                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5" data-i18n="llm_model_label">
-                        LLM Model Name
-                    </label>
-                    <input id="settings-llm-model" type="text" placeholder="gpt-4o-mini (or deepseek-chat)" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500 font-mono text-xs">
-                </div>
-
-                <div class="border-t border-slate-800/80 pt-4"></div>
-
-                <!-- Speaking Rate -->
-                <div>
-                    <div class="flex items-center justify-between mb-1.5">
-                        <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider" data-i18n="speaking_rate_label">
-                            Speaking Speed (语速调节)
-                        </label>
-                        <span id="settings-rate-val" class="text-xs font-mono text-indigo-400">1.0x</span>
-                    </div>
-                    <input id="settings-rate" type="range" min="0.7" max="1.3" step="0.1" value="1.0" class="w-full accent-indigo-500">
-                    <div class="flex justify-between text-[10px] text-slate-500 mt-0.5">
-                        <span data-i18n="rate_slow">0.7x (Slow)</span>
-                        <span data-i18n="rate_normal">1.0x (Normal)</span>
-                        <span data-i18n="rate_fast">1.3x (Fast)</span>
+                <!-- TAB 4: SPEED PREFERENCE & TEST -->
+                <div id="tab-content-pref" class="settings-tab-pane space-y-4 hidden">
+                    <div class="p-4 rounded-2xl bg-slate-800/40 border border-slate-700/60">
+                        <div class="flex items-center justify-between mb-2">
+                            <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider" data-i18n="speaking_rate_label">
+                                Speaking Speed (语速调节)
+                            </label>
+                            <span id="settings-rate-val" class="text-xs font-mono font-bold text-indigo-400">1.0x</span>
+                        </div>
+                        <input id="settings-rate" type="range" min="0.7" max="1.3" step="0.1" value="1.0" class="w-full accent-indigo-500">
+                        <div class="flex justify-between text-[10px] text-slate-500 mt-1">
+                            <span data-i18n="rate_slow">0.7x (Slow)</span>
+                            <span data-i18n="rate_normal">1.0x (Normal)</span>
+                            <span data-i18n="rate_fast">1.3x (Fast)</span>
+                        </div>
                     </div>
                 </div>
 
             </form>
 
-            <!-- Modal Action Buttons -->
-            <div class="mt-6 pt-4 border-t border-slate-800 flex items-center justify-between">
-                <button id="test-tts-btn" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-slate-700 text-xs font-medium transition" data-i18n="test_voice_btn">
+            <!-- Modal Action Footer -->
+            <div class="mt-4 pt-3.5 border-t border-slate-800 flex items-center justify-between flex-none">
+                <button id="test-tts-btn" type="button" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-slate-700 text-xs font-medium transition flex items-center space-x-1.5" data-i18n="test_voice_btn">
                     🔊 Test Voice
                 </button>
                 <div class="flex items-center space-x-2">
-                    <button id="save-settings-btn" class="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium shadow-md shadow-indigo-600/30 transition" data-i18n="save_changes_btn">
+                    <button id="cancel-settings-btn" type="button" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium border border-slate-700 transition" data-i18n="cancel_btn">
+                        Cancel
+                    </button>
+                    <button id="save-settings-btn" type="button" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium shadow-md shadow-indigo-600/30 transition" data-i18n="save_changes_btn">
                         Save Changes
                     </button>
                 </div>

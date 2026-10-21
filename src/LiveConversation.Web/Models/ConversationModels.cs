@@ -31,11 +31,18 @@ public class CoachFeedback
 
 public class ClientSettings
 {
-    public string? TtsProvider { get; set; } // "ElevenLabs" or "EdgeTTS" or "OpenAITTS"
+    public string? TtsProvider { get; set; } // "ElevenLabs" or "EdgeTTS" or "OpenAITTS" or "WebSpeech"
     public string? ElevenLabsApiKey { get; set; }
     public string? ElevenLabsModelId { get; set; }
     public string? LlmApiKey { get; set; }
     public string? LlmEndpoint { get; set; }
     public string? LlmModel { get; set; }
     public float SpeakingRate { get; set; } = 1.0f;
+
+    // STT configuration
+    public string SttProvider { get; set; } = "WebSpeech"; // "WebSpeech" or "Whisper"
+    public string? WhisperEndpoint { get; set; }
+    public string? WhisperApiKey { get; set; }
+    public string? WhisperModel { get; set; } = "whisper-1";
+    public string? SttLanguage { get; set; } // "auto", "en", "zh"
 }

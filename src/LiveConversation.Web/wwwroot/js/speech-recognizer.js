@@ -1,29 +1,49 @@
 /**
- * SpeechRecognizer: Encapsulates browser Web Speech API with VAD auto-stop and push-to-talk.
+ * SpeechRecognizer: Encapsulates browser Web Speech API and Whisper PCM WAV STT
+ * with VAD auto-stop and push-to-talk.
  */
 class SpeechRecognizer {
     constructor() {
         const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-        this.isSupported = !!SpeechRec;
-        this.recognition = this.isSupported ? new SpeechRec() : null;
+        this.isWebSpeechSupported = !!SpeechRec;
+        this.recognition = this.isWebSpeechSupported ? new SpeechRec() : null;
+        this.engine = 'WebSpeech'; // 'WebSpeech' or 'Whisper'
+
         this.isListening = false;
         this.mode = 'hands-free'; // 'hands-free' or 'push-to-talk'
         this.silenceTimer = null;
-        this.silenceDelayMs = 900; // Time of silence before auto-submitting in hands-free mode
+        this.silenceDelayMs = 900; // Time of silence before auto-submitting in WebSpeech
         this.accumulatedTranscript = '';
+        this.forcedLanguage = null;
+
+        // Whisper AudioContext & PCM WAV state
+        this.mediaStream = null;
+        this.audioContext = null;
+        this.pcmProcessor = null;
+        this.pcmBuffers = [];
+        this.analyser = null;
+        this.vadInterval = null;
         
         // Callbacks
         this.onInterimResult = null; // (text) => {}
         this.onFinalResult = null;   // (text) => {}
+        this.onAudioResult = null;   // ({ audioBase64, mimeType, blob }) => {}
         this.onStateChange = null;   // (isListening) => {}
         this.onError = null;         // (err) => {}
 
-        if (this.isSupported) {
-            this._setupRecognition();
+        if (this.isWebSpeechSupported) {
+            this._setupWebSpeech();
         }
     }
 
-    _setupRecognition() {
+    setEngine(engine) {
+        if (this.isListening) {
+            this.stop();
+        }
+        this.engine = engine === 'Whisper' ? 'Whisper' : 'WebSpeech';
+    }
+
+    _setupWebSpeech() {
         this.recognition.continuous = true;
         this.recognition.interimResults = true;
         this.recognition.lang = 'en-US';
@@ -63,7 +83,7 @@ class SpeechRecognizer {
         };
 
         this.recognition.onerror = (event) => {
-            console.warn('Speech recognition event error:', event.error);
+            console.warn('WebSpeech event error:', event.error);
             if (event.error === 'no-speech') {
                 return; // User was just quiet, ignore
             }
@@ -109,7 +129,6 @@ class SpeechRecognizer {
     }
 
     setRecognitionLanguage(lang) {
-        // lang can be 'auto', 'en-US', 'zh-CN'
         if (lang === 'auto') {
             this.forcedLanguage = null;
         } else {
@@ -124,12 +143,32 @@ class SpeechRecognizer {
         this.mode = mode; // 'hands-free' or 'push-to-talk'
     }
 
-    start() {
-        if (!this.isSupported) {
-            if (this.onError) this.onError('Web Speech API is not supported in this browser. Please use Chrome/Edge or use text input.');
+    async start() {
+        if (this.isListening) return;
+
+        if (this.engine === 'Whisper') {
+            await this._startWhisperRecording();
+        } else {
+            this._startWebSpeech();
+        }
+    }
+
+    stop() {
+        if (!this.isListening) return;
+
+        if (this.engine === 'Whisper') {
+            this._stopWhisperRecording();
+        } else {
+            this._stopWebSpeech();
+        }
+    }
+
+    // --- Web Speech Methods ---
+    _startWebSpeech() {
+        if (!this.isWebSpeechSupported) {
+            if (this.onError) this.onError('Web Speech API is not supported in this browser. Please use Chrome/Edge or switch to Whisper in Settings.');
             return;
         }
-        if (this.isListening) return;
 
         this.accumulatedTranscript = '';
         try {
@@ -139,8 +178,8 @@ class SpeechRecognizer {
         }
     }
 
-    stop() {
-        if (!this.isSupported || !this.isListening) return;
+    _stopWebSpeech() {
+        if (!this.isWebSpeechSupported || !this.isListening) return;
         this._clearSilenceTimer();
         try {
             this.recognition.stop();
@@ -152,7 +191,6 @@ class SpeechRecognizer {
     _resetSilenceTimer() {
         this._clearSilenceTimer();
         this.silenceTimer = setTimeout(() => {
-            // User paused speaking for silenceDelayMs -> automatically finalize turn
             if (this.isListening) {
                 this.stop();
             }
@@ -163,6 +201,219 @@ class SpeechRecognizer {
         if (this.silenceTimer) {
             clearTimeout(this.silenceTimer);
             this.silenceTimer = null;
+        }
+    }
+
+    // --- Whisper PCM WAV Methods ---
+    async _startWhisperRecording() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            if (this.onError) this.onError('Microphone access is not supported in this browser.');
+            return;
+        }
+
+        try {
+            if (!this.mediaStream || !this.mediaStream.active) {
+                this.mediaStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        channelCount: 1,
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
+                });
+            }
+
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            this.audioContext = new AudioCtx();
+            const source = this.audioContext.createMediaStreamSource(this.mediaStream);
+
+            // Analyser for real-time volume detection & VAD
+            this.analyser = this.audioContext.createAnalyser();
+            this.analyser.fftSize = 256;
+            source.connect(this.analyser);
+
+            // Capture raw PCM buffers
+            const bufferSize = 4096;
+            this.pcmProcessor = this.audioContext.createScriptProcessor(bufferSize, 1, 1);
+            this.pcmBuffers = [];
+
+            this.pcmProcessor.onaudioprocess = (e) => {
+                if (!this.isListening) return;
+                const channelData = e.inputBuffer.getChannelData(0);
+                this.pcmBuffers.push(new Float32Array(channelData));
+            };
+
+            source.connect(this.pcmProcessor);
+            this.pcmProcessor.connect(this.audioContext.destination);
+
+            this.isListening = true;
+            if (this.onStateChange) this.onStateChange(true);
+            if (this.onInterimResult) {
+                const tipText = window.i18n ? window.i18n.t('mic_status_recording') : '🎙️ Recording speech for Whisper...';
+                this.onInterimResult(tipText);
+            }
+
+            if (this.mode === 'hands-free') {
+                this._startVad();
+            }
+        } catch (err) {
+            console.error('Whisper recording failed to start:', err);
+            if (this.onError) {
+                this.onError(`Microphone error: ${err.message}`);
+            }
+        }
+    }
+
+    _stopWhisperRecording() {
+        if (!this.isListening) return;
+        this.isListening = false;
+        if (this.onStateChange) this.onStateChange(false);
+        this._stopVad();
+
+        if (this.pcmProcessor) {
+            try { this.pcmProcessor.disconnect(); } catch (e) {}
+            this.pcmProcessor = null;
+        }
+
+        const inputSampleRate = this.audioContext ? this.audioContext.sampleRate : 44100;
+        if (this.audioContext && this.audioContext.state !== 'closed') {
+            try { this.audioContext.close(); } catch (e) {}
+            this.audioContext = null;
+        }
+
+        // Merge collected buffers
+        let totalLength = 0;
+        for (let i = 0; i < this.pcmBuffers.length; i++) {
+            totalLength += this.pcmBuffers[i].length;
+        }
+
+        if (totalLength < 3200) {
+            // Less than ~0.15s: ignore accidental micro-clicks
+            this.pcmBuffers = [];
+            return;
+        }
+
+        const mergedSamples = new Float32Array(totalLength);
+        let offset = 0;
+        for (let i = 0; i < this.pcmBuffers.length; i++) {
+            mergedSamples.set(this.pcmBuffers[i], offset);
+            offset += this.pcmBuffers[i].length;
+        }
+        this.pcmBuffers = [];
+
+        // Downsample to 16000Hz (Whisper native rate)
+        const targetSampleRate = 16000;
+        const downsampled = this._downsampleBuffer(mergedSamples, inputSampleRate, targetSampleRate);
+        const wavBlob = this._encodeWav(downsampled, targetSampleRate);
+
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            const dataUrl = reader.result;
+            const base64 = typeof dataUrl === 'string' && dataUrl.includes(',') ? dataUrl.split(',')[1] : '';
+            if (base64 && this.onAudioResult) {
+                this.onAudioResult({ audioBase64: base64, mimeType: 'audio/wav', blob: wavBlob });
+            }
+        };
+        reader.readAsDataURL(wavBlob);
+    }
+
+    _downsampleBuffer(buffer, sampleRate, outSampleRate) {
+        if (outSampleRate === sampleRate || outSampleRate > sampleRate) {
+            return buffer;
+        }
+        const sampleRateRatio = sampleRate / outSampleRate;
+        const newLength = Math.round(buffer.length / sampleRateRatio);
+        const result = new Float32Array(newLength);
+        let offsetResult = 0;
+        let offsetBuffer = 0;
+        while (offsetResult < result.length) {
+            const nextOffsetBuffer = Math.round((offsetResult + 1) * sampleRateRatio);
+            let accum = 0;
+            let count = 0;
+            for (let i = offsetBuffer; i < nextOffsetBuffer && i < buffer.length; i++) {
+                accum += buffer[i];
+                count++;
+            }
+            result[offsetResult] = count > 0 ? accum / count : 0;
+            offsetResult++;
+            offsetBuffer = nextOffsetBuffer;
+        }
+        return result;
+    }
+
+    _encodeWav(samples, sampleRate) {
+        const buffer = new ArrayBuffer(44 + samples.length * 2);
+        const view = new DataView(buffer);
+
+        function writeString(offset, string) {
+            for (let i = 0; i < string.length; i++) {
+                view.setUint8(offset + i, string.charCodeAt(i));
+            }
+        }
+
+        writeString(0, 'RIFF');
+        view.setUint32(4, 36 + samples.length * 2, true);
+        writeString(8, 'WAVE');
+        writeString(12, 'fmt ');
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true); // PCM format
+        view.setUint16(22, 1, true); // Mono channel
+        view.setUint32(24, sampleRate, true);
+        view.setUint32(28, sampleRate * 2, true);
+        view.setUint16(32, 2, true);
+        view.setUint16(34, 16, true);
+        writeString(36, 'data');
+        view.setUint32(40, samples.length * 2, true);
+
+        let offset = 44;
+        for (let i = 0; i < samples.length; i++) {
+            const s = Math.max(-1, Math.min(1, samples[i]));
+            view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+            offset += 2;
+        }
+
+        return new Blob([view], { type: 'audio/wav' });
+    }
+
+    _startVad() {
+        this._stopVad();
+        if (!this.analyser) return;
+
+        const dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+        let hasSpoken = false;
+        let silenceStartTime = null;
+
+        this.vadInterval = setInterval(() => {
+            if (!this.isListening) {
+                this._stopVad();
+                return;
+            }
+
+            this.analyser.getByteFrequencyData(dataArray);
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i++) {
+                sum += dataArray[i];
+            }
+            const avgVolume = sum / dataArray.length;
+
+            if (avgVolume > 12) {
+                hasSpoken = true;
+                silenceStartTime = null;
+            } else if (hasSpoken) {
+                if (!silenceStartTime) {
+                    silenceStartTime = Date.now();
+                } else if (Date.now() - silenceStartTime > 1200) {
+                    // 1.2s silence after speech -> auto-finalize turn
+                    this.stop();
+                }
+            }
+        }, 100);
+    }
+
+    _stopVad() {
+        if (this.vadInterval) {
+            clearInterval(this.vadInterval);
+            this.vadInterval = null;
         }
     }
 }

@@ -9,6 +9,32 @@ document.addEventListener('DOMContentLoaded', async () => {
     function applyTheme(theme) {
         document.body.className = `${theme} min-h-screen lg:h-screen lg:overflow-hidden flex flex-col font-sans antialiased selection:bg-indigo-500 selection:text-white`;
         localStorage.setItem('live_conv_theme', theme);
+        document.querySelectorAll('.theme-btn').forEach(btn => {
+            if (btn.dataset.theme === theme) {
+                btn.classList.add('bg-slate-700', 'ring-1', 'ring-indigo-400');
+            } else {
+                btn.classList.remove('bg-slate-700', 'ring-1', 'ring-indigo-400');
+            }
+        });
+    }
+
+    function updateDynamicDialogueLang() {
+        document.querySelectorAll('.replay-btn-text').forEach(el => {
+            el.textContent = i18n.t('replay_btn');
+        });
+        document.querySelectorAll('.coach-hint-lbl').forEach(el => {
+            el.textContent = i18n.t('coach_hint_label');
+        });
+        document.querySelectorAll('.coach-hint-switch').forEach(el => {
+            el.textContent = i18n.t('coach_hint_switch');
+        });
+        document.querySelectorAll('.coach-hint-praise').forEach(el => {
+            el.textContent = i18n.t('coach_hint_praise');
+        });
+        document.querySelectorAll('.coach-badge').forEach(el => {
+            const hasIssues = el.getAttribute('data-has-issues') === 'true';
+            el.textContent = hasIssues ? i18n.t('coach_badge_needs_polish') : i18n.t('coach_badge_natural');
+        });
     }
 
     const savedTheme = localStorage.getItem('live_conv_theme') || 'theme-cosmic';
@@ -56,6 +82,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             i18n.setLanguage(nextLang);
             updateMicUi();
             updateCollapseUi();
+            updateSttUi();
             if (state.currentPersona) {
                 updatePersonaUi(state.currentPersona);
             }
@@ -65,6 +92,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (typeof updateTooltipsLang === 'function') {
                 updateTooltipsLang();
             }
+            updateDynamicDialogueLang();
         });
     }
 
@@ -89,12 +117,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 2. Instantiate Audio, Speech, and Visualizer
     const audioPlayer = new AudioPlayer();
     const speechRecognizer = new SpeechRecognizer();
+    speechRecognizer.setEngine(state.settings.sttProvider || 'WebSpeech');
+
     const visualizerCanvas = document.getElementById('visualizer-canvas');
     const visualizer = new Visualizer(visualizerCanvas, audioPlayer);
 
     const sttLangSelect = document.getElementById('stt-lang-select');
     if (sttLangSelect) {
+        if (state.settings.sttLanguage) {
+            sttLangSelect.value = state.settings.sttLanguage;
+        }
         sttLangSelect.addEventListener('change', (e) => {
+            state.settings.sttLanguage = e.target.value;
+            localStorage.setItem('live_conv_stt_lang', e.target.value);
             speechRecognizer.setRecognitionLanguage(e.target.value);
         });
     }
@@ -141,6 +176,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
+    speechRecognizer.onAudioResult = ({ audioBase64, mimeType }) => {
+        document.getElementById('speech-interim-container').classList.add('hidden');
+        document.getElementById('speech-interim-text').textContent = '';
+        if (audioBase64) {
+            sendUserAudio(audioBase64, mimeType);
+        }
+    };
+
     speechRecognizer.onError = (err) => {
         console.warn('Speech recognizer error:', err);
         showNotification(`Speech Recognition: ${err}`, 'warning');
@@ -173,6 +216,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         updatePersonaUi(data.persona);
         updateScenarioUi(data.scenario);
         updateTtsBadge(state.settings.ttsProvider || data.activeTtsProvider);
+        updateSttUi();
         updateTooltipsLang();
 
         if (sttLangSelect && sttLangSelect.value !== 'auto') {
@@ -215,6 +259,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     connection.on('ReceiveCoachFeedback', (feedback) => {
         renderCoachCard(feedback);
+    });
+
+    connection.on('ReceiveUserTranscript', (userText) => {
+        if (userText && userText.trim()) {
+            renderUserBubble(userText.trim());
+        } else {
+            showNotification('No speech recognized by Whisper. Please try speaking again.', 'warning');
+        }
     });
 
     connection.on('ConversationInterrupted', () => {
@@ -272,6 +324,25 @@ document.addEventListener('DOMContentLoaded', async () => {
             await connection.invoke('SendUserMessage', text, state.currentCountry, state.currentScene, getClientSettingsPayload());
         } catch (e) {
             showNotification(`Send failed: ${e.message}`, 'error');
+        }
+    }
+
+    async function sendUserAudio(audioBase64, mimeType) {
+        if (!audioBase64) return;
+
+        // Barge-in: if partner is speaking, stop them
+        if (state.isAiSpeaking) {
+            audioPlayer.stop();
+            await connection.invoke('Interrupt');
+        }
+
+        showNotification(i18n.t('whisper_transcribing'), 'info');
+
+        // Send to backend Whisper STT
+        try {
+            await connection.invoke('SendUserAudio', audioBase64, mimeType, state.currentCountry, state.currentScene, getClientSettingsPayload());
+        } catch (e) {
+            showNotification(`Audio STT failed: ${e.message}`, 'error');
         }
     }
 
@@ -344,12 +415,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const replayBtn = document.createElement('button');
         replayBtn.className = 'px-2 py-0.5 text-xs rounded bg-slate-700 hover:bg-slate-600 text-slate-300 flex items-center space-x-1 transition';
-        replayBtn.innerHTML = `<span>${i18n.t('replay_btn')}</span>`;
+        replayBtn.innerHTML = `<span class="replay-btn-text" data-i18n="replay_btn">${i18n.t('replay_btn')}</span>`;
         replayBtn.onclick = async () => {
             replayBtn.disabled = true;
             replayBtn.classList.add('opacity-75');
-            const originalHtml = replayBtn.innerHTML;
-            replayBtn.innerHTML = `<span>⏳ ...</span>`;
+            replayBtn.innerHTML = `<span>${i18n.t('replay_loading')}</span>`;
 
             try {
                 const country = state.currentPersona?.countryCode || 'US';
@@ -357,7 +427,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             } finally {
                 replayBtn.disabled = false;
                 replayBtn.classList.remove('opacity-75');
-                replayBtn.innerHTML = originalHtml;
+                replayBtn.innerHTML = `<span class="replay-btn-text" data-i18n="replay_btn">${i18n.t('replay_btn')}</span>`;
             }
         };
         replayBar.appendChild(replayBtn);
@@ -371,9 +441,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         const card = document.createElement('div');
         card.className = 'bg-slate-800/90 border border-slate-700/80 rounded-xl p-4 mb-3 shadow-lg animate-fade-in';
 
-        let badge = feedback.hasIssues 
-            ? `<span class="px-2 py-0.5 rounded text-xs bg-amber-500/20 text-amber-300 border border-amber-500/30">Needs Polish</span>`
-            : `<span class="px-2 py-0.5 rounded text-xs bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Natural & Clear</span>`;
+        const badgeText = feedback.hasIssues ? i18n.t('coach_badge_needs_polish') : i18n.t('coach_badge_natural');
+        const badgeClass = feedback.hasIssues 
+            ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' 
+            : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30';
+        const badge = `<span class="coach-badge px-2 py-0.5 rounded text-xs border ${badgeClass}" data-has-issues="${feedback.hasIssues}">${badgeText}</span>`;
 
         card.innerHTML = `
             <div class="flex items-center justify-between mb-2">
@@ -382,21 +454,21 @@ document.addEventListener('DOMContentLoaded', async () => {
             </div>
             ${feedback.correctedText ? `
             <div class="mb-2">
-                <div class="text-xs text-slate-400 font-medium">${i18n.t('coach_correction')}</div>
+                <div class="text-xs text-slate-400 font-medium" data-i18n="coach_correction">${i18n.t('coach_correction')}</div>
                 <div class="text-sm text-emerald-400 font-medium">${escapeHtml(feedback.correctedText)}</div>
             </div>` : ''}
             ${feedback.nativeAlternative ? `
             <div class="mb-2">
-                <div class="text-xs text-slate-400 font-medium">${i18n.t('coach_native')}</div>
+                <div class="text-xs text-slate-400 font-medium" data-i18n="coach_native">${i18n.t('coach_native')}</div>
                 <div class="text-sm text-indigo-300 font-medium">${escapeHtml(feedback.nativeAlternative)}</div>
             </div>` : ''}
             ${feedback.explanation ? `
             <div class="text-xs text-slate-300 bg-slate-900/60 p-2.5 rounded-lg border border-slate-700/50 mt-2">
-                <span class="text-indigo-400 font-semibold">${i18n.t('coach_explanation')} </span>${escapeHtml(feedback.explanation)}
+                <span class="text-indigo-400 font-semibold" data-i18n="coach_explanation">${i18n.t('coach_explanation')} </span>${escapeHtml(feedback.explanation)}
             </div>` : ''}
             ${feedback.vocabularyHighlight ? `
             <div class="mt-2 text-xs text-slate-400">
-                <span class="text-amber-400 font-medium">${i18n.t('coach_spotlight')} </span> <span class="text-slate-200 underline decoration-indigo-500 underline-offset-2">${escapeHtml(feedback.vocabularyHighlight)}</span>
+                <span class="text-amber-400 font-medium" data-i18n="coach_spotlight">${i18n.t('coach_spotlight')} </span> <span class="text-slate-200 underline decoration-indigo-500 underline-offset-2">${escapeHtml(feedback.vocabularyHighlight)}</span>
             </div>` : ''}
         `;
 
@@ -427,16 +499,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                     if (feedback.hasIssues) {
                         hintDiv.innerHTML = `
                             <div class="flex items-center space-x-1.5 text-amber-200 font-medium">
-                                <span>💡 纠偏建议:</span>
+                                <span class="coach-hint-lbl" data-i18n="coach_hint_label">${i18n.t('coach_hint_label')}</span>
                                 <span class="underline decoration-amber-400">${escapeHtml(feedback.correctedText || '')}</span>
                             </div>
-                            <div class="text-[11px] text-indigo-200">👉 点击切换到右侧【AI 影子伴学】查看深度解析</div>
+                            <div class="text-[11px] text-indigo-200 coach-hint-switch" data-i18n="coach_hint_switch">${i18n.t('coach_hint_switch')}</div>
                         `;
                     } else {
                         hintDiv.innerHTML = `
                             <div class="flex items-center space-x-1.5 text-emerald-200 text-[11px]">
                                 <span>✨</span>
-                                <span>表达规范地道！地道推荐: ${escapeHtml(feedback.nativeAlternative || '')}</span>
+                                <span class="coach-hint-praise" data-i18n="coach_hint_praise">${i18n.t('coach_hint_praise')}</span>
+                                <span class="font-medium">${escapeHtml(feedback.nativeAlternative || '')}</span>
                             </div>
                         `;
                     }
@@ -453,7 +526,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         if (feedback.hasIssues) {
-            showNotification('💡 AI 影子伴学：检测到语法建议，已生成纠偏卡片！', 'warning');
+            showNotification(i18n.t('coach_notification_detected'), 'warning');
         }
     }
 
@@ -544,6 +617,25 @@ document.addEventListener('DOMContentLoaded', async () => {
         } else {
             badge.textContent = 'Edge-TTS (Neural)';
             badge.className = 'text-xs px-2.5 py-1 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/30';
+        }
+    }
+
+    function updateSttUi() {
+        const isWhisper = state.settings.sttProvider === 'Whisper';
+        const sttBadge = document.getElementById('active-stt-badge');
+        const sttLangSelect = document.getElementById('stt-lang-select');
+
+        if (sttBadge) {
+            sttBadge.classList.toggle('hidden', !isWhisper);
+        }
+
+        if (sttLangSelect) {
+            const autoOpt = sttLangSelect.querySelector('option[value="auto"]');
+            if (autoOpt) {
+                autoOpt.textContent = isWhisper 
+                    ? (window.i18n ? window.i18n.t('stt_lang_auto_whisper') : '🎙️ Whisper: Auto Adaptive')
+                    : (window.i18n ? window.i18n.t('stt_lang_auto_webspeech') : '🌐 STT: Auto');
+            }
         }
     }
 
@@ -909,11 +1001,46 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('close-settings-btn').addEventListener('click', () => {
         settingsModal.classList.add('hidden');
     });
+    document.getElementById('cancel-settings-btn')?.addEventListener('click', () => {
+        settingsModal.classList.add('hidden');
+    });
+
+    // Settings Segmented Tab Switching
+    document.querySelectorAll('.settings-tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.settings-tab-btn').forEach(b => {
+                b.classList.remove('active', 'bg-indigo-600', 'text-white', 'shadow-sm');
+                b.classList.add('text-slate-400');
+            });
+            btn.classList.add('active', 'bg-indigo-600', 'text-white', 'shadow-sm');
+            btn.classList.remove('text-slate-400');
+
+            const targetTab = btn.dataset.tab;
+            document.querySelectorAll('.settings-tab-pane').forEach(pane => {
+                pane.classList.toggle('hidden', pane.id !== targetTab);
+            });
+        });
+    });
+
+    // Quick presets / chips click handler
+    document.querySelectorAll('.quick-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            const targetId = chip.dataset.target;
+            const val = chip.dataset.val;
+            const targetInput = document.getElementById(targetId);
+            if (targetInput) {
+                targetInput.value = val;
+                targetInput.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        });
+    });
+
     document.getElementById('save-settings-btn').addEventListener('click', async () => {
         saveSettingsFromForm();
         settingsModal.classList.add('hidden');
-        showNotification('Settings saved successfully!', 'success');
+        showNotification(i18n.currentLang === 'zh' ? '设置保存成功！' : 'Settings saved successfully!', 'success');
         updateTtsBadge(state.settings.ttsProvider);
+        updateSttUi();
         audioPlayer.setPlaybackRate(state.settings.speakingRate || 1.0);
         await initSession();
     });
@@ -944,15 +1071,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             const base64 = await connection.invoke('TestTts', testText, engine, voiceId, apiKey, elevenModel);
             if (base64) {
                 await audioPlayer.replayAudioBase64(base64, rate);
-                showNotification('TTS test played successfully!', 'success');
+                showNotification(i18n.currentLang === 'zh' ? '试听播放成功！' : 'TTS test played successfully!', 'success');
             } else {
                 audioPlayer.speakWebSpeech(testText, country, rate);
-                showNotification('WebSpeech test played successfully!', 'success');
+                showNotification(i18n.currentLang === 'zh' ? '浏览器语音试听播放成功！' : 'WebSpeech test played successfully!', 'success');
             }
         } catch (e) {
             showNotification(`TTS test failed: ${e.message}`, 'error');
         } finally {
-            document.getElementById('test-tts-btn').textContent = '🔊 Test Voice';
+            document.getElementById('test-tts-btn').textContent = i18n.t('test_voice_btn');
         }
     });
 
@@ -965,7 +1092,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             llmApiKey: localStorage.getItem('live_conv_llm_key') || '',
             llmEndpoint: localStorage.getItem('live_conv_llm_endpoint') || '',
             llmModel: localStorage.getItem('live_conv_llm_model') || '',
-            speakingRate: parseFloat(localStorage.getItem('live_conv_rate') || '1.0')
+            speakingRate: parseFloat(localStorage.getItem('live_conv_rate') || '1.0'),
+            sttProvider: localStorage.getItem('live_conv_stt_provider') || 'WebSpeech',
+            whisperEndpoint: localStorage.getItem('live_conv_whisper_endpoint') || '',
+            whisperApiKey: localStorage.getItem('live_conv_whisper_key') || '',
+            whisperModel: localStorage.getItem('live_conv_whisper_model') || 'whisper-1',
+            sttLanguage: localStorage.getItem('live_conv_stt_lang') || 'auto'
         };
     }
 
@@ -976,6 +1108,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const cfg = await res.json();
                 if (!state.settings.ttsProvider && cfg.ttsProvider) {
                     state.settings.ttsProvider = cfg.ttsProvider;
+                }
+                if (!state.settings.sttProvider && cfg.sttProvider) {
+                    state.settings.sttProvider = cfg.sttProvider;
+                }
+                if (!state.settings.whisperModel && cfg.whisperModel) {
+                    state.settings.whisperModel = cfg.whisperModel;
+                }
+                if (!state.settings.whisperEndpoint && cfg.whisperEndpoint) {
+                    state.settings.whisperEndpoint = cfg.whisperEndpoint;
                 }
                 if (!state.settings.elevenLabsModelId && cfg.elevenLabsModel) {
                     state.settings.elevenLabsModelId = cfg.elevenLabsModel === 'eleven_v4_turbo' ? 'eleven_multilingual_v2' : cfg.elevenLabsModel;
@@ -989,6 +1130,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     state.settings.llmModel = cfg.llmModel;
                 }
                 updateTtsBadge(state.settings.ttsProvider || cfg.ttsProvider || 'ElevenLabs');
+                updateSttUi();
             }
         } catch (e) {
             console.warn('Could not sync server config:', e);
@@ -996,6 +1138,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function populateSettingsForm() {
+        // Reset to first tab
+        document.querySelectorAll('.settings-tab-btn').forEach((btn, idx) => {
+            if (idx === 0) {
+                btn.classList.add('active', 'bg-indigo-600', 'text-white', 'shadow-sm');
+                btn.classList.remove('text-slate-400');
+            } else {
+                btn.classList.remove('active', 'bg-indigo-600', 'text-white', 'shadow-sm');
+                btn.classList.add('text-slate-400');
+            }
+        });
+        document.querySelectorAll('.settings-tab-pane').forEach((pane, idx) => {
+            pane.classList.toggle('hidden', idx !== 0);
+        });
+
         document.getElementById('settings-tts-provider').value = state.settings.ttsProvider || 'ElevenLabs';
         document.getElementById('settings-elevenlabs-key').value = state.settings.elevenLabsApiKey;
         document.getElementById('settings-elevenlabs-model').value = state.settings.elevenLabsModelId || '';
@@ -1004,7 +1160,40 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('settings-llm-model').value = state.settings.llmModel;
         document.getElementById('settings-rate').value = state.settings.speakingRate;
         document.getElementById('settings-rate-val').textContent = `${state.settings.speakingRate}x`;
+
+        const elevenlabsConfig = document.getElementById('elevenlabs-config-container');
+        if (elevenlabsConfig) {
+            elevenlabsConfig.classList.toggle('hidden', (state.settings.ttsProvider || 'ElevenLabs') !== 'ElevenLabs');
+        }
+
+        const sttSelect = document.getElementById('settings-stt-provider');
+        if (sttSelect) sttSelect.value = state.settings.sttProvider || 'WebSpeech';
+        const whisperEndpointInput = document.getElementById('settings-whisper-endpoint');
+        if (whisperEndpointInput) whisperEndpointInput.value = state.settings.whisperEndpoint || '';
+        const whisperKeyInput = document.getElementById('settings-whisper-key');
+        if (whisperKeyInput) whisperKeyInput.value = state.settings.whisperApiKey || '';
+        const whisperModelInput = document.getElementById('settings-whisper-model');
+        if (whisperModelInput) whisperModelInput.value = state.settings.whisperModel || 'whisper-1';
+
+        const whisperConfigContainer = document.getElementById('whisper-config-container');
+        if (whisperConfigContainer) {
+            whisperConfigContainer.classList.toggle('hidden', (state.settings.sttProvider || 'WebSpeech') !== 'Whisper');
+        }
     }
+
+    document.getElementById('settings-tts-provider')?.addEventListener('change', (e) => {
+        const elevenlabsConfig = document.getElementById('elevenlabs-config-container');
+        if (elevenlabsConfig) {
+            elevenlabsConfig.classList.toggle('hidden', e.target.value !== 'ElevenLabs');
+        }
+    });
+
+    document.getElementById('settings-stt-provider')?.addEventListener('change', (e) => {
+        const whisperConfigContainer = document.getElementById('whisper-config-container');
+        if (whisperConfigContainer) {
+            whisperConfigContainer.classList.toggle('hidden', e.target.value !== 'Whisper');
+        }
+    });
 
     function saveSettingsFromForm() {
         state.settings.ttsProvider = document.getElementById('settings-tts-provider').value;
@@ -1015,6 +1204,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         state.settings.llmModel = document.getElementById('settings-llm-model').value.trim();
         state.settings.speakingRate = parseFloat(document.getElementById('settings-rate').value);
 
+        state.settings.sttProvider = document.getElementById('settings-stt-provider')?.value || 'WebSpeech';
+        state.settings.whisperEndpoint = document.getElementById('settings-whisper-endpoint')?.value.trim() || '';
+        state.settings.whisperApiKey = document.getElementById('settings-whisper-key')?.value.trim() || '';
+        state.settings.whisperModel = document.getElementById('settings-whisper-model')?.value.trim() || 'whisper-1';
+
         localStorage.setItem('live_conv_tts_provider', state.settings.ttsProvider);
         localStorage.setItem('live_conv_elevenlabs_key', state.settings.elevenLabsApiKey);
         localStorage.setItem('live_conv_elevenlabs_model', state.settings.elevenLabsModelId);
@@ -1022,6 +1216,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         localStorage.setItem('live_conv_llm_endpoint', state.settings.llmEndpoint);
         localStorage.setItem('live_conv_llm_model', state.settings.llmModel);
         localStorage.setItem('live_conv_rate', state.settings.speakingRate.toString());
+
+        localStorage.setItem('live_conv_stt_provider', state.settings.sttProvider);
+        localStorage.setItem('live_conv_whisper_endpoint', state.settings.whisperEndpoint);
+        localStorage.setItem('live_conv_whisper_key', state.settings.whisperApiKey);
+        localStorage.setItem('live_conv_whisper_model', state.settings.whisperModel);
+
+        speechRecognizer.setEngine(state.settings.sttProvider);
+        updateSttUi();
     }
 
     function getClientSettingsPayload() {
@@ -1032,7 +1234,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             llmApiKey: state.settings.llmApiKey || null,
             llmEndpoint: state.settings.llmEndpoint || null,
             llmModel: state.settings.llmModel || null,
-            speakingRate: state.settings.speakingRate
+            speakingRate: state.settings.speakingRate,
+            sttProvider: state.settings.sttProvider || 'WebSpeech',
+            whisperEndpoint: state.settings.whisperEndpoint || null,
+            whisperApiKey: state.settings.whisperApiKey || null,
+            whisperModel: state.settings.whisperModel || null,
+            sttLanguage: state.settings.sttLanguage || 'auto'
         };
     }
 
