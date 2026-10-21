@@ -9,6 +9,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     function applyTheme(theme) {
         document.body.className = `${theme} min-h-screen lg:h-screen lg:overflow-hidden flex flex-col font-sans antialiased selection:bg-indigo-500 selection:text-white`;
         localStorage.setItem('live_conv_theme', theme);
+        if (theme === 'theme-light') {
+            document.documentElement.classList.remove('dark');
+        } else {
+            document.documentElement.classList.add('dark');
+        }
         document.querySelectorAll('.theme-btn').forEach(btn => {
             if (btn.dataset.theme === theme) {
                 btn.classList.add('bg-slate-700', 'ring-1', 'ring-indigo-400');
