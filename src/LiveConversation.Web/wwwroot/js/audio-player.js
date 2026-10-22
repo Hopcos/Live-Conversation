@@ -14,11 +14,13 @@ class AudioPlayer {
         this._currentReplayResolve = null;
         this._replayCancelled = false;
         this._currentWebUtterance = null;
+        this.aiTurnStreamingFinished = false;
         
         // Callbacks
-        this.onPlaybackStateChange = null; // (isPlaying) => {}
-        this.onSentenceStart = null;       // (sentenceIndex, text) => {}
-        this.onSentenceEnd = null;         // (sentenceIndex) => {}
+        this.onPlaybackStateChange = null;  // (isPlaying) => {}
+        this.onSentenceStart = null;        // (sentenceIndex, text) => {}
+        this.onSentenceEnd = null;          // (sentenceIndex) => {}
+        this.onTurnPlaybackComplete = null; // () => {} triggered only when all sentences of AI turn finish playing
 
         // Preload WebSpeech voices
         if ('speechSynthesis' in window) {
@@ -56,12 +58,30 @@ class AudioPlayer {
         }
     }
 
+    resetTurn() {
+        this.aiTurnStreamingFinished = false;
+    }
+
+    markAiTurnStreamingFinished() {
+        this.aiTurnStreamingFinished = true;
+        // If nothing is playing and the queue is already empty, complete turn now
+        if (!this.isPlaying && this.queue.length === 0) {
+            this.aiTurnStreamingFinished = false;
+            if (this.onTurnPlaybackComplete) {
+                this.onTurnPlaybackComplete();
+            }
+        }
+    }
+
     /**
      * Enqueues an audio sentence for playback.
      * If base64Audio is absent or decoding fails, smoothly falls back to browser native WebSpeech!
      */
     async enqueueSentence(sentenceIndex, text, base64Audio, isLast = false, countryCode = 'US') {
         this._replayCancelled = false; // Always clear cancellation on fresh incoming sentence!
+        if (isLast) {
+            this.aiTurnStreamingFinished = true;
+        }
 
         if (!base64Audio) {
             this.queue.push({
@@ -118,6 +138,14 @@ class AudioPlayer {
             this.isPlaying = false;
             this.currentSentence = null;
             if (this.onPlaybackStateChange) this.onPlaybackStateChange(false);
+
+            // If all sentences for this turn have arrived and playback is drained
+            if (this.aiTurnStreamingFinished) {
+                this.aiTurnStreamingFinished = false;
+                if (this.onTurnPlaybackComplete) {
+                    this.onTurnPlaybackComplete();
+                }
+            }
             return;
         }
 
@@ -173,6 +201,7 @@ class AudioPlayer {
     stop() {
         this.queue = [];
         this._replayCancelled = true;
+        this.aiTurnStreamingFinished = false;
 
         if ('speechSynthesis' in window) {
             try {

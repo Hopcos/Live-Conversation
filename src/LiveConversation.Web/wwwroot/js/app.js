@@ -112,7 +112,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         activeTtsProvider: 'EdgeTTS',
         mode: 'hands-free', // 'hands-free' or 'push-to-talk'
         isAiSpeaking: false,
+        isAiThinking: false,
         isListening: false,
+        handsFreePaused: false,
+        cooldownTimer: null,
         activeAssistantTurnElement: null,
         sentencesInTurn: [],
         coachingCards: [],
@@ -144,13 +147,32 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Audio Player State Hooks
     audioPlayer.onPlaybackStateChange = (isPlaying) => {
         state.isAiSpeaking = isPlaying;
-        document.getElementById('interrupt-btn').disabled = !isPlaying;
-        updateVisualizerState();
-
-        // In hands-free mode, if AI finishes speaking, resume listening
-        if (!isPlaying && state.mode === 'hands-free' && !state.isListening) {
-            speechRecognizer.start();
+        if (isPlaying) {
+            state.isAiThinking = false;
+            // Block speech recognizer while AI voice is coming out of speakers
+            speechRecognizer.setBlocked(true);
         }
+        document.getElementById('interrupt-btn').disabled = !isPlaying && !state.isAiThinking;
+        updateVisualizerState();
+        updateMicUi();
+    };
+
+    // Triggered ONLY after ALL sentences in the AI turn are completely played and silent
+    audioPlayer.onTurnPlaybackComplete = () => {
+        state.isAiSpeaking = false;
+        state.isAiThinking = false;
+        updateVisualizerState();
+        updateMicUi();
+
+        // Echo-prevention grace period: wait 400ms for room reverb/speaker tail to die down
+        clearTimeout(state.cooldownTimer);
+        state.cooldownTimer = setTimeout(() => {
+            speechRecognizer.setBlocked(false);
+            if (state.mode === 'hands-free' && !state.handsFreePaused) {
+                speechRecognizer.start();
+            }
+            updateMicUi();
+        }, 400);
     };
 
     audioPlayer.onSentenceStart = (sentenceIndex, text) => {
@@ -237,9 +259,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     connection.on('ReceiveTextChunk', (token) => {
+        state.isAiThinking = true;
+        speechRecognizer.setBlocked(true);
         ensureAssistantTurnElement();
         const contentSpan = state.activeAssistantTurnElement.querySelector('.turn-content');
         contentSpan.textContent += token;
+        updateMicUi();
         scrollToBottom();
     });
 
@@ -260,6 +285,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             attachReplayButtonsToTurn(state.activeAssistantTurnElement);
             state.activeAssistantTurnElement = null;
         }
+        audioPlayer.markAiTurnStreamingFinished();
     });
 
     connection.on('ReceiveCoachFeedback', (feedback) => {
@@ -275,16 +301,35 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     connection.on('ConversationInterrupted', () => {
+        clearTimeout(state.cooldownTimer);
         audioPlayer.stop();
+        state.isAiThinking = false;
+        state.isAiSpeaking = false;
+        speechRecognizer.setBlocked(false);
         if (state.activeAssistantTurnElement) {
             attachReplayButtonsToTurn(state.activeAssistantTurnElement);
             state.activeAssistantTurnElement = null;
         }
+        if (state.mode === 'hands-free' && !state.handsFreePaused) {
+            speechRecognizer.start();
+        }
+        updateMicUi();
+        updateVisualizerState();
         showNotification('Partner interrupted', 'info');
     });
 
     connection.on('ReceiveError', (errorMsg) => {
+        clearTimeout(state.cooldownTimer);
+        audioPlayer.stop();
+        state.isAiThinking = false;
+        state.isAiSpeaking = false;
+        speechRecognizer.setBlocked(false);
         state.activeAssistantTurnElement = null;
+        if (state.mode === 'hands-free' && !state.handsFreePaused) {
+            speechRecognizer.start();
+        }
+        updateMicUi();
+        updateVisualizerState();
         showNotification(errorMsg, 'error');
     });
 
@@ -307,8 +352,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 4. Session & Messaging Methods
     async function initSession() {
+        clearTimeout(state.cooldownTimer);
         audioPlayer.stop();
         audioPlayer.resetCancelState();
+        audioPlayer.resetTurn();
+        state.isAiSpeaking = false;
+        state.isAiThinking = true;
+        speechRecognizer.setBlocked(true);
+        updateMicUi();
         await connection.invoke('InitSession', state.currentCountry, state.currentScene, getClientSettingsPayload());
     }
 
@@ -321,6 +372,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             await connection.invoke('Interrupt');
         }
 
+        state.isAiThinking = true;
+        state.isAiSpeaking = false;
+        speechRecognizer.setBlocked(true);
+        audioPlayer.resetTurn();
+        updateMicUi();
+        updateVisualizerState();
+
         // Render user message bubble
         renderUserBubble(text);
 
@@ -328,6 +386,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             await connection.invoke('SendUserMessage', text, state.currentCountry, state.currentScene, getClientSettingsPayload());
         } catch (e) {
+            state.isAiThinking = false;
+            speechRecognizer.setBlocked(false);
+            if (state.mode === 'hands-free' && !state.handsFreePaused) {
+                speechRecognizer.start();
+            }
+            updateMicUi();
             showNotification(`Send failed: ${e.message}`, 'error');
         }
     }
@@ -341,12 +405,25 @@ document.addEventListener('DOMContentLoaded', async () => {
             await connection.invoke('Interrupt');
         }
 
+        state.isAiThinking = true;
+        state.isAiSpeaking = false;
+        speechRecognizer.setBlocked(true);
+        audioPlayer.resetTurn();
+        updateMicUi();
+        updateVisualizerState();
+
         showNotification(i18n.t('whisper_transcribing'), 'info');
 
         // Send to backend Whisper STT
         try {
             await connection.invoke('SendUserAudio', audioBase64, mimeType, state.currentCountry, state.currentScene, getClientSettingsPayload());
         } catch (e) {
+            state.isAiThinking = false;
+            speechRecognizer.setBlocked(false);
+            if (state.mode === 'hands-free' && !state.handsFreePaused) {
+                speechRecognizer.start();
+            }
+            updateMicUi();
             showNotification(`Audio STT failed: ${e.message}`, 'error');
         }
     }
@@ -650,15 +727,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         const micStatusText = document.getElementById('mic-status-text');
 
         if (state.isListening) {
-            micBtn.className = 'w-16 h-16 rounded-full bg-rose-600 hover:bg-rose-500 flex items-center justify-center shadow-lg shadow-rose-600/50 transition-all transform scale-105 pulse-ring';
+            micBtn.className = 'w-16 h-16 rounded-full bg-rose-600 hover:bg-rose-500 flex items-center justify-center shadow-lg shadow-rose-600/50 transition-all transform scale-105 pulse-ring cursor-pointer';
             micStatusText.textContent = state.mode === 'hands-free' 
                 ? i18n.t('mic_status_listening') 
                 : i18n.t('mic_status_recording');
             micStatusText.className = 'text-xs text-rose-400 font-medium';
+        } else if (state.isAiSpeaking) {
+            micBtn.className = 'w-16 h-16 rounded-full bg-pink-600/90 hover:bg-pink-500 flex items-center justify-center shadow-lg shadow-pink-600/40 transition-all transform hover:scale-105 cursor-pointer';
+            micStatusText.textContent = i18n.t('mic_status_ai_speaking');
+            micStatusText.className = 'text-xs text-pink-400 font-medium';
+        } else if (state.isAiThinking) {
+            micBtn.className = 'w-16 h-16 rounded-full bg-amber-600/80 hover:bg-amber-500 flex items-center justify-center shadow-lg shadow-amber-600/30 transition-all transform hover:scale-105 animate-pulse cursor-pointer';
+            micStatusText.textContent = i18n.t('mic_status_ai_thinking');
+            micStatusText.className = 'text-xs text-amber-400 font-medium';
         } else {
-            micBtn.className = 'w-16 h-16 rounded-full bg-indigo-600 hover:bg-indigo-500 flex items-center justify-center shadow-lg shadow-indigo-600/40 transition-all transform hover:scale-105';
+            micBtn.className = 'w-16 h-16 rounded-full bg-indigo-600 hover:bg-indigo-500 flex items-center justify-center shadow-lg shadow-indigo-600/40 transition-all transform hover:scale-105 cursor-pointer';
             micStatusText.textContent = state.mode === 'hands-free' 
-                ? i18n.t('mic_status_hands_free_idle') 
+                ? (state.handsFreePaused ? i18n.t('mic_status_hands_free_idle') : i18n.t('mic_status_listening'))
                 : i18n.t('mic_status_push_idle');
             micStatusText.className = 'text-xs text-slate-400';
         }
@@ -888,13 +973,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Mode Selector (Hands-Free vs Push-To-Talk)
     document.getElementById('mode-hands-free').addEventListener('click', () => {
         state.mode = 'hands-free';
+        state.handsFreePaused = false;
         speechRecognizer.setMode('hands-free');
         document.getElementById('mode-hands-free').classList.add('bg-indigo-600', 'text-white');
         document.getElementById('mode-hands-free').classList.remove('text-slate-400');
         document.getElementById('mode-push-to-talk').classList.remove('bg-indigo-600', 'text-white');
         document.getElementById('mode-push-to-talk').classList.add('text-slate-400');
+        
+        // Only start listening if AI is NOT thinking or speaking
+        if (!state.isAiSpeaking && !state.isAiThinking) {
+            speechRecognizer.setBlocked(false);
+            speechRecognizer.start();
+        }
         updateMicUi();
-        speechRecognizer.start();
     });
 
     document.getElementById('mode-push-to-talk').addEventListener('click', () => {
@@ -913,16 +1004,37 @@ document.addEventListener('DOMContentLoaded', async () => {
     micBtn.addEventListener('click', () => {
         if (state.mode === 'hands-free') {
             if (state.isListening) {
+                // User explicitly clicked to pause hands-free listening
+                state.handsFreePaused = true;
                 speechRecognizer.stop();
             } else {
+                // User explicitly clicked to unpause/start hands-free listening
+                state.handsFreePaused = false;
+                if (state.isAiSpeaking || state.isAiThinking) {
+                    clearTimeout(state.cooldownTimer);
+                    audioPlayer.stop();
+                    connection.invoke('Interrupt');
+                    state.isAiSpeaking = false;
+                    state.isAiThinking = false;
+                }
+                speechRecognizer.setBlocked(false);
                 speechRecognizer.start();
             }
+            updateMicUi();
         }
     });
 
     // Push-to-talk mouse/touch events
     micBtn.addEventListener('mousedown', () => {
         if (state.mode === 'push-to-talk') {
+            if (state.isAiSpeaking || state.isAiThinking) {
+                clearTimeout(state.cooldownTimer);
+                audioPlayer.stop();
+                connection.invoke('Interrupt');
+                state.isAiSpeaking = false;
+                state.isAiThinking = false;
+            }
+            speechRecognizer.setBlocked(false);
             speechRecognizer.start();
         }
     });
@@ -938,10 +1050,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (e.code === 'Space' && !e.repeat && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
             e.preventDefault();
             spaceKeyDown = true;
-            if (state.isAiSpeaking) {
+            if (state.isAiSpeaking || state.isAiThinking) {
+                clearTimeout(state.cooldownTimer);
                 audioPlayer.stop();
                 connection.invoke('Interrupt');
+                state.isAiSpeaking = false;
+                state.isAiThinking = false;
             }
+            speechRecognizer.setBlocked(false);
             speechRecognizer.start();
         }
     });
@@ -957,8 +1073,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Interrupt button
     document.getElementById('interrupt-btn').addEventListener('click', () => {
+        clearTimeout(state.cooldownTimer);
         audioPlayer.stop();
         connection.invoke('Interrupt');
+        state.isAiSpeaking = false;
+        state.isAiThinking = false;
+        speechRecognizer.setBlocked(false);
+        if (state.mode === 'hands-free') {
+            state.handsFreePaused = false;
+            speechRecognizer.start();
+        }
+        updateMicUi();
+        updateVisualizerState();
     });
 
     // Text Input Fallback

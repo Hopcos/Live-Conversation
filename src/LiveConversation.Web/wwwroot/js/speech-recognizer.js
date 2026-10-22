@@ -10,6 +10,7 @@ class SpeechRecognizer {
         this.engine = 'WebSpeech'; // 'WebSpeech' or 'Whisper'
 
         this.isListening = false;
+        this.isBlocked = false;
         this.mode = 'hands-free'; // 'hands-free' or 'push-to-talk'
         this.silenceTimer = null;
         this.silenceDelayMs = 900; // Time of silence before auto-submitting in WebSpeech
@@ -97,6 +98,12 @@ class SpeechRecognizer {
             if (this.onStateChange) this.onStateChange(false);
             this._clearSilenceTimer();
 
+            // Discard any speech recognized if blocked (e.g. AI turn or interrupt)
+            if (this.isBlocked) {
+                this.accumulatedTranscript = '';
+                return;
+            }
+
             // Submit what was accumulated if any
             if (this.accumulatedTranscript.trim()) {
                 const text = this.accumulatedTranscript.trim();
@@ -139,12 +146,25 @@ class SpeechRecognizer {
         }
     }
 
+    setBlocked(blocked) {
+        this.isBlocked = !!blocked;
+        if (this.isBlocked) {
+            this.accumulatedTranscript = '';
+            this.pcmBuffers = [];
+            this._clearSilenceTimer();
+            this._stopVad();
+            if (this.isListening) {
+                this.stop();
+            }
+        }
+    }
+
     setMode(mode) {
         this.mode = mode; // 'hands-free' or 'push-to-talk'
     }
 
     async start() {
-        if (this.isListening) return;
+        if (this.isListening || this.isBlocked) return;
 
         if (this.engine === 'Whisper') {
             await this._startWhisperRecording();
@@ -238,13 +258,17 @@ class SpeechRecognizer {
             this.pcmBuffers = [];
 
             this.pcmProcessor.onaudioprocess = (e) => {
-                if (!this.isListening) return;
+                if (!this.isListening || this.isBlocked) return;
                 const channelData = e.inputBuffer.getChannelData(0);
                 this.pcmBuffers.push(new Float32Array(channelData));
             };
 
+            // Mute gain node prevents mic audio from playing back into local speakers (acoustic loop prevention)
+            const muteGain = this.audioContext.createGain();
+            muteGain.gain.value = 0.0;
             source.connect(this.pcmProcessor);
-            this.pcmProcessor.connect(this.audioContext.destination);
+            this.pcmProcessor.connect(muteGain);
+            muteGain.connect(this.audioContext.destination);
 
             this.isListening = true;
             if (this.onStateChange) this.onStateChange(true);
@@ -273,6 +297,15 @@ class SpeechRecognizer {
         if (this.pcmProcessor) {
             try { this.pcmProcessor.disconnect(); } catch (e) {}
             this.pcmProcessor = null;
+        }
+
+        if (this.isBlocked) {
+            this.pcmBuffers = [];
+            if (this.audioContext && this.audioContext.state !== 'closed') {
+                try { this.audioContext.close(); } catch (e) {}
+                this.audioContext = null;
+            }
+            return;
         }
 
         const inputSampleRate = this.audioContext ? this.audioContext.sampleRate : 44100;
