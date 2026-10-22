@@ -48,6 +48,7 @@ const I18N_DICTIONARY = {
         
         // Settings Modal Tabs & Titles
         settings_modal_title: "Engine & Model Settings",
+        drag_to_move: "⋮⋮ Drag to move",
         settings_tab_tts: "🔊 Voice (TTS)",
         settings_tab_stt: "🎙️ Speech (STT)",
         settings_tab_llm: "🤖 Model (LLM)",
@@ -97,6 +98,15 @@ const I18N_DICTIONARY = {
         replay_btn: "🔊 Replay (0.8x)",
         replay_loading: "⏳ Playing...",
         
+        // Mobile Navigation Tabs & Quick Scroll
+        mobile_tab_stage: "Stage",
+        mobile_tab_dialogue: "Dialogue",
+        mobile_tab_coach: "Coach",
+        mobile_quick_send: "Send",
+        mobile_quick_placeholder: "Type in English or Chinese...",
+        scroll_to_dialogue: "💬 Scroll down to Live Dialogue & Coach ↓",
+        scroll_to_top: "↑ Back to top",
+
         // Coach Cards and Live Dialogue Feedback
         coach_correction: "Correction:",
         coach_native: "Native Phrasing:",
@@ -186,6 +196,7 @@ const I18N_DICTIONARY = {
         
         // Settings Modal Tabs & Titles
         settings_modal_title: "语音引擎与模型配置",
+        drag_to_move: "⋮⋮ 可拖动",
         settings_tab_tts: "🔊 TTS 语音合成",
         settings_tab_stt: "🎙️ STT 语音识别",
         settings_tab_llm: "🤖 LLM 对话模型",
@@ -234,6 +245,15 @@ const I18N_DICTIONARY = {
         you: "你",
         replay_btn: "🔊 慢速复读 (0.8x)",
         replay_loading: "⏳ 正在复读...",
+
+        // Mobile Navigation Tabs & Quick Scroll
+        mobile_tab_stage: "口语对练",
+        mobile_tab_dialogue: "实时对话",
+        mobile_tab_coach: "影子伴学",
+        mobile_quick_send: "发送",
+        mobile_quick_placeholder: "输入中英文直接回复...",
+        scroll_to_dialogue: "💬 下滑查看实时对话与影子伴学 ↓",
+        scroll_to_top: "↑ 回到顶部",
 
         // Coach Cards and Live Dialogue Feedback
         coach_correction: "语法修正：",

@@ -111,6 +111,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         allScenarios: [],
         activeTtsProvider: 'EdgeTTS',
         mode: 'hands-free', // 'hands-free' or 'push-to-talk'
+        mobileView: 'stage', // 'stage', 'dialogue', 'coach'
         isAiSpeaking: false,
         isAiThinking: false,
         isListening: false,
@@ -599,7 +600,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         document.getElementById('tab-coach').click();
                         setTimeout(() => {
                             card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                        }, 50);
+                        }, 60);
                     };
                     innerBox.appendChild(hintDiv);
                 }
@@ -663,8 +664,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Keep collapsed summary header synced
         const summaryFlag = document.getElementById('collapse-summary-flag');
         const summaryPersona = document.getElementById('collapse-summary-persona');
+        const mobileSummary = document.getElementById('collapse-mobile-summary');
         if (summaryFlag) summaryFlag.textContent = persona.flagEmoji;
         if (summaryPersona) summaryPersona.textContent = `${persona.name} (${persona.countryCode})`;
+        if (mobileSummary) mobileSummary.textContent = `${persona.flagEmoji} ${persona.name.split(' ')[0]}`;
 
         // Render suggested topics matching current persona & scenario
         renderSuggestedTopics(persona, state.currentScenario);
@@ -1024,9 +1027,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // Push-to-talk mouse/touch events
-    micBtn.addEventListener('mousedown', () => {
+    // Push-to-talk mouse & touch events (Instant Mobile & Desktop Ergonomics)
+    const handlePushToTalkStart = () => {
         if (state.mode === 'push-to-talk') {
+            if (navigator.vibrate) {
+                try { navigator.vibrate(35); } catch (e) { }
+            }
             if (state.isAiSpeaking || state.isAiThinking) {
                 clearTimeout(state.cooldownTimer);
                 audioPlayer.stop();
@@ -1037,12 +1043,39 @@ document.addEventListener('DOMContentLoaded', async () => {
             speechRecognizer.setBlocked(false);
             speechRecognizer.start();
         }
-    });
-    micBtn.addEventListener('mouseup', () => {
+    };
+
+    const handlePushToTalkEnd = () => {
         if (state.mode === 'push-to-talk') {
             speechRecognizer.stop();
         }
-    });
+    };
+
+    micBtn.addEventListener('mousedown', handlePushToTalkStart);
+    micBtn.addEventListener('mouseup', handlePushToTalkEnd);
+    micBtn.addEventListener('mouseleave', handlePushToTalkEnd);
+
+    // Touch events with passive: false to prevent mobile long-press context menus & tap delay
+    micBtn.addEventListener('touchstart', (e) => {
+        if (state.mode === 'push-to-talk') {
+            e.preventDefault();
+            handlePushToTalkStart();
+        }
+    }, { passive: false });
+
+    micBtn.addEventListener('touchend', (e) => {
+        if (state.mode === 'push-to-talk') {
+            e.preventDefault();
+            handlePushToTalkEnd();
+        }
+    }, { passive: false });
+
+    micBtn.addEventListener('touchcancel', (e) => {
+        if (state.mode === 'push-to-talk') {
+            e.preventDefault();
+            handlePushToTalkEnd();
+        }
+    }, { passive: false });
 
     // Keyboard Space shortcut
     let spaceKeyDown = false;
@@ -1123,10 +1156,125 @@ document.addEventListener('DOMContentLoaded', async () => {
         scrollCoachToBottom(false);
     });
 
-    // Settings Modal
+    // 7. Draggable Settings Modal (Default Top-Aligned with Drag Handle & Viewport Clamping)
     const settingsModal = document.getElementById('settings-modal');
+    const settingsModalCard = document.getElementById('settings-modal-card');
+    const settingsDragHandle = document.getElementById('settings-drag-handle');
+    const settingsDragHeader = document.getElementById('settings-modal-header');
+
+    function resetSettingsModalPosition() {
+        if (!settingsModalCard) return;
+        settingsModalCard.style.position = '';
+        settingsModalCard.style.left = '';
+        settingsModalCard.style.top = '';
+        settingsModalCard.style.transform = '';
+        settingsModalCard.style.margin = '';
+        settingsModalCard.style.zIndex = '';
+    }
+
+    function initDraggableSettingsModal() {
+        if (!settingsModalCard || !settingsDragHeader) return;
+
+        let isDragging = false;
+        let startPointerX = 0;
+        let startPointerY = 0;
+        let startCardLeft = 0;
+        let startCardTop = 0;
+
+        const onPointerStart = (e) => {
+            // Ignore drag if clicking interactive elements inside header
+            if (e.target.closest('button, input, select, textarea, a')) return;
+
+            const pointer = e.touches ? e.touches[0] : e;
+            isDragging = true;
+            startPointerX = pointer.clientX;
+            startPointerY = pointer.clientY;
+
+            const rect = settingsModalCard.getBoundingClientRect();
+            startCardLeft = rect.left;
+            startCardTop = rect.top;
+
+            // Switch to fixed coordinates for fluid dragging
+            settingsModalCard.style.position = 'fixed';
+            settingsModalCard.style.left = `${startCardLeft}px`;
+            settingsModalCard.style.top = `${startCardTop}px`;
+            settingsModalCard.style.transform = 'none';
+            settingsModalCard.style.margin = '0';
+            settingsModalCard.style.zIndex = '60';
+
+            document.body.style.userSelect = 'none';
+            if (e.cancelable) e.preventDefault();
+        };
+
+        const onPointerMove = (e) => {
+            if (!isDragging) return;
+
+            const pointer = e.touches ? e.touches[0] : e;
+            const deltaX = pointer.clientX - startPointerX;
+            const deltaY = pointer.clientY - startPointerY;
+
+            let newLeft = startCardLeft + deltaX;
+            let newTop = startCardTop + deltaY;
+
+            // Viewport boundary clamping
+            const cardWidth = settingsModalCard.offsetWidth;
+            const minLeft = 6;
+            const maxLeft = Math.max(minLeft, window.innerWidth - cardWidth - 6);
+            const minTop = 6;
+            const maxTop = Math.max(minTop, window.innerHeight - 60);
+
+            newLeft = Math.max(minLeft, Math.min(newLeft, maxLeft));
+            newTop = Math.max(minTop, Math.min(newTop, maxTop));
+
+            settingsModalCard.style.left = `${newLeft}px`;
+            settingsModalCard.style.top = `${newTop}px`;
+
+            if (e.cancelable) e.preventDefault();
+        };
+
+        const onPointerEnd = () => {
+            if (!isDragging) return;
+            isDragging = false;
+            document.body.style.userSelect = '';
+        };
+
+        // Attach mouse drag listeners
+        settingsDragHeader.addEventListener('mousedown', onPointerStart);
+        if (settingsDragHandle) settingsDragHandle.addEventListener('mousedown', onPointerStart);
+        window.addEventListener('mousemove', onPointerMove, { passive: false });
+        window.addEventListener('mouseup', onPointerEnd);
+
+        // Attach mobile touch drag listeners
+        settingsDragHeader.addEventListener('touchstart', onPointerStart, { passive: false });
+        if (settingsDragHandle) settingsDragHandle.addEventListener('touchstart', onPointerStart, { passive: false });
+        window.addEventListener('touchmove', onPointerMove, { passive: false });
+        window.addEventListener('touchend', onPointerEnd);
+        window.addEventListener('touchcancel', onPointerEnd);
+    }
+
+    initDraggableSettingsModal();
+
+    // Mobile Dialogue Quick Reply Input Bar
+    const mobDialogueInput = document.getElementById('mobile-dialogue-input');
+    const mobDialogueSendBtn = document.getElementById('mobile-dialogue-send-btn');
+    if (mobDialogueInput && mobDialogueSendBtn) {
+        const handleMobSend = () => {
+            const text = mobDialogueInput.value.trim();
+            if (text) {
+                mobDialogueInput.value = '';
+                sendUserSpeech(text);
+            }
+        };
+        mobDialogueSendBtn.addEventListener('click', handleMobSend);
+        mobDialogueInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') handleMobSend();
+        });
+    }
+
+    // Settings Modal Open / Close
     document.getElementById('open-settings-btn').addEventListener('click', () => {
         populateSettingsForm();
+        resetSettingsModalPosition(); // Always reset to default top position when opening
         settingsModal.classList.remove('hidden');
     });
     document.getElementById('close-settings-btn').addEventListener('click', () => {
@@ -1134,6 +1282,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     document.getElementById('cancel-settings-btn')?.addEventListener('click', () => {
         settingsModal.classList.add('hidden');
+    });
+
+    // Close on backdrop click
+    settingsModal.addEventListener('click', (e) => {
+        if (e.target === settingsModal) {
+            settingsModal.classList.add('hidden');
+        }
     });
 
     // Settings Segmented Tab Switching

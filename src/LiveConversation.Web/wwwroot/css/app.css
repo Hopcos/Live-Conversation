@@ -1004,3 +1004,84 @@ body.theme-light ::-webkit-scrollbar-thumb:hover {
     padding: 2px 4px;
     transition: all 0.2s ease;
 }
+
+/* ==========================================================================
+   MOBILE & TABLET RESPONSIVE ADAPTATION & DRAGGABLE MODAL
+   ========================================================================== */
+
+/* Safe Area Insets for iOS Home Indicator and Android Gestures */
+.safe-area-pb {
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0.5rem));
+}
+
+.safe-area-pt {
+    padding-top: max(0.5rem, env(safe-area-inset-top, 0.5rem));
+}
+
+/* Draggable Settings Modal Ergonomics */
+#settings-drag-handle,
+#settings-modal-header {
+    cursor: grab;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+#settings-drag-handle:active,
+#settings-modal-header:active {
+    cursor: grabbing;
+}
+
+/* Smooth Touch Momentum Scrolling in Dialogue & Coach Panels */
+#dialogue-stream,
+#panel-coach {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+}
+
+/* Mobile Mic Button Touch Ergonomics (Zero-delay, No Callout, No Select) */
+#mic-main-btn {
+    touch-action: none;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Utility to hide scrollbars on horizontal tab bars */
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+.no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+/* Mobile Theme Adjustments */
+body.theme-emerald #mobile-dialogue-input-bar {
+    border-color: rgba(16, 185, 129, 0.25) !important;
+}
+body.theme-emerald #settings-drag-handle div {
+    background-color: rgba(16, 185, 129, 0.6) !important;
+}
+
+body.theme-amethyst #mobile-dialogue-input-bar {
+    border-color: rgba(192, 132, 252, 0.25) !important;
+}
+body.theme-amethyst #settings-drag-handle div {
+    background-color: rgba(192, 132, 252, 0.6) !important;
+}
+
+body.theme-light #mobile-dialogue-input-bar {
+    border-color: #e2e8f0 !important;
+    background: #ffffff !important;
+}
+body.theme-light #mobile-dialogue-input {
+    background: #f8fafc !important;
+    border-color: #cbd5e1 !important;
+    color: #0f172a !important;
+}
+body.theme-light #settings-drag-handle div {
+    background-color: #94a3b8 !important;
+}
