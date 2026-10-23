@@ -56,6 +56,12 @@ class SpeechRecognizer {
         };
 
         this.recognition.onresult = (event) => {
+            if (this.isBlocked) {
+                this.accumulatedTranscript = '';
+                this._clearSilenceTimer();
+                return;
+            }
+
             let interim = '';
             let finalThisTurn = '';
 
@@ -108,7 +114,7 @@ class SpeechRecognizer {
             if (this.accumulatedTranscript.trim()) {
                 const text = this.accumulatedTranscript.trim();
                 this.accumulatedTranscript = '';
-                if (this.onFinalResult) {
+                if (this.onFinalResult && !this.isBlocked) {
                     this.onFinalResult(text);
                 }
             }
@@ -154,7 +160,7 @@ class SpeechRecognizer {
             this._clearSilenceTimer();
             this._stopVad();
             if (this.isListening) {
-                this.stop();
+                this.stop(true);
             }
         }
     }
@@ -173,20 +179,19 @@ class SpeechRecognizer {
         }
     }
 
-    stop() {
+    stop(abort = false) {
         if (!this.isListening) return;
 
         if (this.engine === 'Whisper') {
-            this._stopWhisperRecording();
+            this._stopWhisperRecording(abort);
         } else {
-            this._stopWebSpeech();
+            this._stopWebSpeech(abort);
         }
     }
 
     // --- Web Speech Methods ---
     _startWebSpeech() {
-        if (!this.isWebSpeechSupported) {
-            if (this.onError) this.onError('Web Speech API is not supported in this browser. Please use Chrome/Edge or switch to Whisper in Settings.');
+        if (!this.isWebSpeechSupported || this.isBlocked) {
             return;
         }
 
@@ -194,15 +199,31 @@ class SpeechRecognizer {
         try {
             this.recognition.start();
         } catch (e) {
-            console.warn('Recognition start exception:', e);
+            if (e.name === 'InvalidStateError') {
+                try {
+                    this.recognition.abort();
+                    setTimeout(() => {
+                        if (!this.isBlocked && !this.isListening) {
+                            try { this.recognition.start(); } catch (err) {}
+                        }
+                    }, 50);
+                } catch (abortErr) {}
+            } else {
+                console.warn('Recognition start exception:', e);
+            }
         }
     }
 
-    _stopWebSpeech() {
+    _stopWebSpeech(abort = false) {
         if (!this.isWebSpeechSupported || !this.isListening) return;
         this._clearSilenceTimer();
+        this.accumulatedTranscript = '';
         try {
-            this.recognition.stop();
+            if (abort && typeof this.recognition.abort === 'function') {
+                this.recognition.abort();
+            } else {
+                this.recognition.stop();
+            }
         } catch (e) {
             console.warn('Recognition stop exception:', e);
         }
@@ -288,7 +309,7 @@ class SpeechRecognizer {
         }
     }
 
-    _stopWhisperRecording() {
+    _stopWhisperRecording(abort = false) {
         if (!this.isListening) return;
         this.isListening = false;
         if (this.onStateChange) this.onStateChange(false);
@@ -299,7 +320,7 @@ class SpeechRecognizer {
             this.pcmProcessor = null;
         }
 
-        if (this.isBlocked) {
+        if (abort || this.isBlocked) {
             this.pcmBuffers = [];
             if (this.audioContext && this.audioContext.state !== 'closed') {
                 try { this.audioContext.close(); } catch (e) {}

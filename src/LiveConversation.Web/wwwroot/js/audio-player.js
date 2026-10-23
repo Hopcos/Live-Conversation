@@ -15,6 +15,7 @@ class AudioPlayer {
         this._replayCancelled = false;
         this._currentWebUtterance = null;
         this.aiTurnStreamingFinished = false;
+        this.decodingCount = 0; // Number of sentence audio decodes currently in-flight
         
         // Callbacks
         this.onPlaybackStateChange = null;  // (isPlaying) => {}
