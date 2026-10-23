@@ -164,13 +164,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Audio Player State Hooks
     audioPlayer.onPlaybackStateChange = (isPlaying) => {
-        state.isAiSpeaking = isPlaying;
-        if (isPlaying) {
+        state.isAiSpeaking = isPlaying || audioPlayer.isBusy();
+        if (state.isAiSpeaking) {
             state.isAiThinking = false;
-            // Block speech recognizer while AI voice is coming out of speakers
+            // Block speech recognizer while AI voice is coming out of speakers or actively decoding
             speechRecognizer.setBlocked(true);
         }
-        document.getElementById('interrupt-btn').disabled = !isPlaying && !state.isAiThinking;
+        document.getElementById('interrupt-btn').disabled = !state.isAiSpeaking && !state.isAiThinking;
         updateVisualizerState();
         updateMicUi();
     };
@@ -182,15 +182,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateVisualizerState();
         updateMicUi();
 
-        // Echo-prevention grace period: wait 400ms for room reverb/speaker tail to die down
+        // Echo-prevention grace period: wait 500ms for room reverb/speaker tail to die down
         clearTimeout(state.cooldownTimer);
         state.cooldownTimer = setTimeout(() => {
+            // Ensure no new turn or playback started during the cooldown
+            if (state.isAiSpeaking || state.isAiThinking || audioPlayer.isBusy()) {
+                return;
+            }
             speechRecognizer.setBlocked(false);
             if (state.mode === 'hands-free' && !state.handsFreePaused) {
                 speechRecognizer.start();
             }
             updateMicUi();
-        }, 400);
+        }, 500);
     };
 
     audioPlayer.onSentenceStart = (sentenceIndex, text) => {
@@ -209,6 +213,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     speechRecognizer.onInterimResult = (text) => {
+        if (state.isAiSpeaking || state.isAiThinking || audioPlayer.isBusy() || speechRecognizer.isBlocked) {
+            return;
+        }
         document.getElementById('speech-interim-text').textContent = text;
         document.getElementById('speech-interim-container').classList.remove('hidden');
     };
@@ -216,6 +223,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     speechRecognizer.onFinalResult = (text) => {
         document.getElementById('speech-interim-container').classList.add('hidden');
         document.getElementById('speech-interim-text').textContent = '';
+        if (state.isAiSpeaking || state.isAiThinking || audioPlayer.isBusy() || speechRecognizer.isBlocked) {
+            console.log('Ignored STT text captured during AI output/cooldown:', text);
+            return;
+        }
         if (text.trim()) {
             sendUserSpeech(text);
         }
@@ -224,6 +235,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     speechRecognizer.onAudioResult = ({ audioBase64, mimeType }) => {
         document.getElementById('speech-interim-container').classList.add('hidden');
         document.getElementById('speech-interim-text').textContent = '';
+        if (state.isAiSpeaking || state.isAiThinking || audioPlayer.isBusy() || speechRecognizer.isBlocked) {
+            console.log('Ignored audio buffer captured during AI output/cooldown');
+            return;
+        }
         if (audioBase64) {
             sendUserAudio(audioBase64, mimeType);
         }
@@ -287,6 +302,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     connection.on('ReceiveSentenceAudio', (payload) => {
+        state.isAiSpeaking = true;
+        state.isAiThinking = false;
+        speechRecognizer.setBlocked(true);
         const country = state.currentPersona?.countryCode || 'US';
         audioPlayer.enqueueSentence(payload.sentenceIndex, payload.text, payload.audioBase64, payload.isLast, country);
         ensureAssistantTurnElement();
@@ -416,6 +434,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     async function sendUserAudio(audioBase64, mimeType) {
         if (!audioBase64) return;
+        if (state.isAiSpeaking || state.isAiThinking || audioPlayer.isBusy() || speechRecognizer.isBlocked) {
+            return;
+        }
 
         // Barge-in: if partner is speaking, stop them
         if (state.isAiSpeaking) {
@@ -521,13 +542,31 @@ document.addEventListener('DOMContentLoaded', async () => {
             replayBtn.classList.add('opacity-75');
             replayBtn.innerHTML = `<span>${i18n.t('replay_loading')}</span>`;
 
+            clearTimeout(state.cooldownTimer);
+            speechRecognizer.setBlocked(true);
+            state.isAiSpeaking = true;
+            updateMicUi();
+            updateVisualizerState();
+
             try {
                 const country = state.currentPersona?.countryCode || 'US';
                 await audioPlayer.replaySentenceList(turnSentences, 0.8, country);
             } finally {
+                state.isAiSpeaking = false;
                 replayBtn.disabled = false;
                 replayBtn.classList.remove('opacity-75');
                 replayBtn.innerHTML = `<span class="replay-btn-text" data-i18n="replay_btn">${i18n.t('replay_btn')}</span>`;
+                updateVisualizerState();
+
+                clearTimeout(state.cooldownTimer);
+                state.cooldownTimer = setTimeout(() => {
+                    if (state.isAiSpeaking || state.isAiThinking || audioPlayer.isBusy()) return;
+                    speechRecognizer.setBlocked(false);
+                    if (state.mode === 'hands-free' && !state.handsFreePaused) {
+                        speechRecognizer.start();
+                    }
+                    updateMicUi();
+                }, 500);
             }
         };
         replayBar.appendChild(replayBtn);
@@ -1372,6 +1411,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Test TTS button in settings modal
     document.getElementById('test-tts-btn').addEventListener('click', async () => {
+        clearTimeout(state.cooldownTimer);
+        speechRecognizer.setBlocked(true);
+        state.isAiSpeaking = true;
+        updateMicUi();
+        updateVisualizerState();
+
         const engine = document.getElementById('settings-tts-provider').value;
         const elevenKey = document.getElementById('settings-elevenlabs-key').value.trim();
         const elevenModel = document.getElementById('settings-elevenlabs-model').value.trim();
@@ -1380,31 +1425,42 @@ document.addEventListener('DOMContentLoaded', async () => {
         const rate = parseFloat(document.getElementById('settings-rate').value) || 1.0;
         const testText = "Hello! This is a test of your speech synthesis and accent settings.";
 
-        if (engine === 'WebSpeech') {
-            audioPlayer.speakWebSpeech(testText, country, rate);
-            showNotification(`🔊 正在试听【${state.currentPersona?.name || 'Partner'}】浏览器原生口音发音 (${country})...`, 'success');
-            return;
-        }
-
-        const voiceId = engine === 'ElevenLabs' 
-            ? (state.currentPersona?.elevenLabsVoiceId || '21m00Tcm4TlvDq8ikWAM') 
-            : (state.currentPersona?.edgeTtsVoiceName || 'en-US-JennyNeural');
-        const apiKey = engine === 'OpenAITTS' ? llmKey : (engine === 'ElevenLabs' ? elevenKey : null);
-
         try {
+            if (engine === 'WebSpeech') {
+                await audioPlayer.speakWebSpeech(testText, country, rate);
+                showNotification(`🔊 正在试听【${state.currentPersona?.name || 'Partner'}】浏览器原生口音发音 (${country})...`, 'success');
+                return;
+            }
+
+            const voiceId = engine === 'ElevenLabs' 
+                ? (state.currentPersona?.elevenLabsVoiceId || '21m00Tcm4TlvDq8ikWAM') 
+                : (state.currentPersona?.edgeTtsVoiceName || 'en-US-JennyNeural');
+            const apiKey = engine === 'OpenAITTS' ? llmKey : (engine === 'ElevenLabs' ? elevenKey : null);
+
             document.getElementById('test-tts-btn').textContent = 'Testing...';
             const base64 = await connection.invoke('TestTts', testText, engine, voiceId, apiKey, elevenModel);
             if (base64) {
                 await audioPlayer.replayAudioBase64(base64, rate);
                 showNotification(i18n.currentLang === 'zh' ? '试听播放成功！' : 'TTS test played successfully!', 'success');
             } else {
-                audioPlayer.speakWebSpeech(testText, country, rate);
+                await audioPlayer.speakWebSpeech(testText, country, rate);
                 showNotification(i18n.currentLang === 'zh' ? '浏览器语音试听播放成功！' : 'WebSpeech test played successfully!', 'success');
             }
         } catch (e) {
             showNotification(`TTS test failed: ${e.message}`, 'error');
         } finally {
             document.getElementById('test-tts-btn').textContent = i18n.t('test_voice_btn');
+            state.isAiSpeaking = false;
+            updateVisualizerState();
+            clearTimeout(state.cooldownTimer);
+            state.cooldownTimer = setTimeout(() => {
+                if (state.isAiSpeaking || state.isAiThinking || audioPlayer.isBusy()) return;
+                speechRecognizer.setBlocked(false);
+                if (state.mode === 'hands-free' && !state.handsFreePaused) {
+                    speechRecognizer.start();
+                }
+                updateMicUi();
+            }, 500);
         }
     });
 

@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/main.png" alt="LiveConversation AI 界面预览" width="100%" />
+</p>
+
 # LiveConversation AI - 网页真人模拟对话系统 (.NET 10)
 
 [English](README.md) | [中文](README.zh.md)

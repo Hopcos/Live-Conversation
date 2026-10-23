@@ -63,11 +63,21 @@ class AudioPlayer {
         this.aiTurnStreamingFinished = false;
     }
 
+    isBusy() {
+        return this.isPlaying || this.queue.length > 0 || this.decodingCount > 0;
+    }
+
     markAiTurnStreamingFinished() {
         this.aiTurnStreamingFinished = true;
-        // If nothing is playing and the queue is already empty, complete turn now
-        if (!this.isPlaying && this.queue.length === 0) {
+        this._checkTurnCompletion();
+    }
+
+    _checkTurnCompletion() {
+        if (this.aiTurnStreamingFinished && this.decodingCount === 0 && this.queue.length === 0 && !this.isPlaying) {
             this.aiTurnStreamingFinished = false;
+            if (this.onPlaybackStateChange) {
+                this.onPlaybackStateChange(false);
+            }
             if (this.onTurnPlaybackComplete) {
                 this.onTurnPlaybackComplete();
             }
@@ -99,6 +109,7 @@ class AudioPlayer {
         }
 
         this._ensureAudioContext();
+        this.decodingCount++;
 
         try {
             const binaryString = atob(base64Audio);
@@ -109,6 +120,10 @@ class AudioPlayer {
             }
 
             const audioBuffer = await this.audioCtx.decodeAudioData(bytes.buffer.slice(0));
+            if (this._replayCancelled) {
+                return;
+            }
+
             this.queue.push({
                 sentenceIndex,
                 text,
@@ -121,16 +136,21 @@ class AudioPlayer {
             }
         } catch (err) {
             console.warn('Failed to decode sentence audio, queuing for WebSpeech fallback:', err);
-            this.queue.push({
-                sentenceIndex,
-                text,
-                useWebSpeech: true,
-                countryCode,
-                isLast
-            });
-            if (!this.isPlaying) {
-                this._playNext();
+            if (!this._replayCancelled) {
+                this.queue.push({
+                    sentenceIndex,
+                    text,
+                    useWebSpeech: true,
+                    countryCode,
+                    isLast
+                });
+                if (!this.isPlaying) {
+                    this._playNext();
+                }
             }
+        } finally {
+            this.decodingCount = Math.max(0, this.decodingCount - 1);
+            this._checkTurnCompletion();
         }
     }
 
@@ -138,15 +158,11 @@ class AudioPlayer {
         if (this.queue.length === 0) {
             this.isPlaying = false;
             this.currentSentence = null;
-            if (this.onPlaybackStateChange) this.onPlaybackStateChange(false);
-
-            // If all sentences for this turn have arrived and playback is drained
-            if (this.aiTurnStreamingFinished) {
-                this.aiTurnStreamingFinished = false;
-                if (this.onTurnPlaybackComplete) {
-                    this.onTurnPlaybackComplete();
-                }
+            if (!this.isBusy() && this.onPlaybackStateChange) {
+                this.onPlaybackStateChange(false);
             }
+
+            this._checkTurnCompletion();
             return;
         }
 
@@ -201,6 +217,7 @@ class AudioPlayer {
      */
     stop() {
         this.queue = [];
+        this.decodingCount = 0;
         this._replayCancelled = true;
         this.aiTurnStreamingFinished = false;
 

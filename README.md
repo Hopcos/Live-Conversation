@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/main.png" alt="LiveConversation AI Preview" width="100%" />
+</p>
+
 # LiveConversation AI - Real-time Voice Simulation System (.NET 10)
 
 [English](README.md) | [中文](README.zh.md)
