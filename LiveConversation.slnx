@@ -7,6 +7,8 @@
   </Folder>
   <Folder Name="/解决方案项/">
     <File Path=".gitignore" />
+    <File Path="LICENSE" />
     <File Path="README.md" />
+    <File Path="README.zh.md" />
   </Folder>
 </Solution>
