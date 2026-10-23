@@ -8,5 +8,6 @@ public interface ICoachService
         string userText, 
         string conversationContext, 
         ClientSettings? settings = null, 
+        string? countryCode = null, 
         CancellationToken ct = default);
 }

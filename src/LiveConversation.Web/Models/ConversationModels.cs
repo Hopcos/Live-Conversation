@@ -27,6 +27,7 @@ public class CoachFeedback
     public string? Explanation { get; set; }
     public string? VocabularyHighlight { get; set; }
     public bool HasIssues { get; set; }
+    public string? Language { get; set; } // "zh" for Chinese speech feedback, "en" for English speech feedback
 }
 
 public class ClientSettings

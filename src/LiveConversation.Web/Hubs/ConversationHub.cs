@@ -227,7 +227,7 @@ public class ConversationHub : Hub
         {
             try
             {
-                var feedback = await _coachService.AnalyzeSpeechAsync(userText, contextSummary, settings);
+                var feedback = await _coachService.AnalyzeSpeechAsync(userText, contextSummary, settings, countryCode);
                 if (feedback != null)
                 {
                     await _hubContext.Clients.Client(connectionId).SendAsync("ReceiveCoachFeedback", feedback);

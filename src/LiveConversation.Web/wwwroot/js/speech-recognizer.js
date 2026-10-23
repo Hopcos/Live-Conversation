@@ -125,12 +125,12 @@ class SpeechRecognizer {
         const langMap = {
             'US': 'en-US',
             'UK': 'en-GB',
-            'AU': 'en-AU',
             'IN': 'en-IN',
             'CA': 'en-CA',
             'RO': 'en-US',
             'UA': 'en-US',
-            'CN': 'zh-CN'
+            'CN': 'zh-CN',
+            'CN-EN': 'zh-CN'
         };
         this.recognition.lang = langMap[countryCode] || 'en-US';
     }

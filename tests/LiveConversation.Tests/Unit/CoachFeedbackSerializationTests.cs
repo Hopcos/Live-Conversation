@@ -61,4 +61,33 @@ public class CoachFeedbackSerializationTests
         Assert.Equal("He go to school yesterday.", feedback.OriginalText);
         Assert.Equal("He went to school yesterday.", feedback.CorrectedText);
     }
+
+    [Fact]
+    public void CoachFeedback_ChineseBilingualFeedback_Succeeds()
+    {
+        var json = """
+        {
+            "hasIssues": true,
+            "correctedText": "你好啊，你是中国人吗？在干嘛呢等等",
+            "nativeAlternative": "哈喽！你也是中国人呀？最近在忙什么呢？",
+            "explanation": "针对口语发音识别与倒装语序进行纠偏，使语义表达更规范流畅。",
+            "vocabularyHighlight": "在忙什么呢 / 你也是中国人呀"
+        }
+        """;
+
+        var feedback = JsonSerializer.Deserialize<CoachFeedback>(json, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        });
+
+        Assert.NotNull(feedback);
+        Assert.True(feedback.HasIssues);
+        Assert.Equal("你好啊，你是中国人吗？在干嘛呢等等", feedback.CorrectedText);
+        Assert.Equal("哈喽！你也是中国人呀？最近在忙什么呢？", feedback.NativeAlternative);
+
+        feedback.OriginalText = "你好啊 你真国人 麻干 等等等";
+        feedback.Language = "zh";
+        Assert.Equal("zh", feedback.Language);
+        Assert.Equal("你好啊 你真国人 麻干 等等等", feedback.OriginalText);
+    }
 }

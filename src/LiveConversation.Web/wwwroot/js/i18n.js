@@ -126,8 +126,6 @@ const I18N_DICTIONARY = {
         persona_desc_US: "Standard American English, natural pacing, clear intonation.",
         persona_name_UK: "Arthur Pendelton (London RP)",
         persona_desc_UK: "British English (Received Pronunciation / Oxford), articulate, refined, rich British idioms.",
-        persona_name_AU: "Liam O'Connor (Sydney)",
-        persona_desc_AU: "Australian English (Aussie), laid-back, energetic cadence, distinctive Aussie colloquialisms.",
         persona_name_IN: "Priya Sharma (Bengaluru)",
         persona_desc_IN: "Indian English, crisp articulation, melodic rhythm, authentic South Asian conversational style.",
         persona_name_CA: "Chloe Tremblay (Vancouver)",
@@ -136,8 +134,12 @@ const I18N_DICTIONARY = {
         persona_desc_RO: "Eastern European / Romanian English, clear articulation, melodic European cadence.",
         persona_name_UA: "Oksana Kovalenko (Kyiv)",
         persona_desc_UA: "Ukrainian / Slavic English, gentle cadence, warm, lyrical and encouraging.",
-        persona_name_CN: "Lin Wei (林薇) (Shanghai)",
-        persona_desc_CN: "Bilingual English & Mandarin (中英双语切换), patient, supportive, authentic pronunciation coach.",
+        persona_name_CN: "Zhang Wei (张伟) (Beijing)",
+        persona_desc_CN: "Standard Mandarin Chinese, authentic natural tone, conversational Chinese partner.",
+        persona_name_CN_EN: "Lin Wei (林薇) (Shanghai)",
+        persona_desc_CN_EN: "Bilingual English & Mandarin switching, patient, supportive, authentic pronunciation coach.",
+        persona_tag_CN: "Mandarin",
+        persona_tag_CN_EN: "Bilingual",
 
         // Hover Descriptions for Scenarios
         scenario_title_daily_chat: "Casual Coffee Chat",
@@ -274,8 +276,6 @@ const I18N_DICTIONARY = {
         persona_desc_US: "标准美式英语，语速自然，语调清晰亲切，科技职场地道口语。",
         persona_name_UK: "Arthur Pendelton (伦敦 • 英式牛津音)",
         persona_desc_UK: "英式标准发音（牛津RP），优雅考究，地道英伦文学与习语表达。",
-        persona_name_AU: "Liam O'Connor (悉尼 • 澳洲口音)",
-        persona_desc_AU: "澳大利亚口音，轻松开朗，极具澳式俚语特色（G'day mate, no worries）。",
         persona_name_IN: "Priya Sharma (班加罗尔 • 印度口音)",
         persona_desc_IN: "印度英语，咬字清晰，南亚特有语调旋律与国际IT职场口语。",
         persona_name_CA: "Chloe Tremblay (温哥华 • 加拿大音)",
@@ -284,8 +284,12 @@ const I18N_DICTIONARY = {
         persona_desc_RO: "东欧/罗马尼亚口音，欧式语调清脆明晰，欧洲数字游民与科技表达。",
         persona_name_UA: "Oksana Kovalenko (基辅 • 斯拉夫口音)",
         persona_desc_UA: "乌克兰/斯拉夫口音，温和抒情，声调优雅，耐心鼓励口语初学者。",
-        persona_name_CN: "Lin Wei (林薇) (上海 • 中英双语)",
-        persona_desc_CN: "中英双语切换，耐心循序渐进，标准地道发音，双语纠错教练。",
+        persona_name_CN: "Zhang Wei (张伟) (北京 • 标准普通话)",
+        persona_desc_CN: "标准中文普通话，语调亲切自然，母语级地道日常中文交流与表达伙伴。",
+        persona_name_CN_EN: "Lin Wei (林薇) (上海 • 中英双语)",
+        persona_desc_CN_EN: "中英双语自由切换，耐心循序渐进，标准地道发音，双语纠错教练。",
+        persona_tag_CN: "中文母语",
+        persona_tag_CN_EN: "中英双语",
 
         // Hover Descriptions for Scenarios
         scenario_title_daily_chat: "日常闲聊 (Coffee Chat)",
@@ -320,6 +324,7 @@ class I18nManager {
 
     applyTranslations() {
         document.querySelectorAll('[data-i18n]').forEach(el => {
+            if (el.getAttribute('data-lang') === 'zh') return;
             const key = el.getAttribute('data-i18n');
             const translation = this.t(key);
             if (el.tagName === 'INPUT' && (el.type === 'text' || el.type === 'password')) {

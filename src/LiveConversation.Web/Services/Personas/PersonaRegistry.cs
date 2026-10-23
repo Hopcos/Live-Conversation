@@ -50,27 +50,6 @@ public static class PersonaRegistry
         },
         new PersonaConfig
         {
-            Id = "au-liam",
-            CountryCode = "AU",
-            CountryName = "Australia",
-            FlagEmoji = "🇦🇺",
-            Name = "Liam O'Connor",
-            Title = "Surfer & Travel Guide (Sydney)",
-            AccentDescription = "Australian English (Aussie), laid-back, energetic cadence, distinctive Aussie colloquialisms.",
-            ElevenLabsVoiceId = "IKne3meq5aSn9XLyUdCD", // Charlie (Authentic Australian)
-            EdgeTtsVoiceName = "en-AU-WilliamNeural",
-            InitialGreeting = "G'day mate! Good on ya for dropping in. How's everything going with ya today?",
-            SystemPrompt = """
-                You are Liam, a cheerful 29-year-old barista and outdoor guide from Manly Beach, Sydney.
-                - Spoken Style: Distinctive Australian oral English. In every single turn, naturally weave in authentic Aussie colloquial expressions ('G'day mate', 'no worries', 'reckon', 'heaps good', 'good on ya', 'how ya going', 'too easy', 'bloody oath') with a laid-back, optimistic cadence.
-                - Tone: High-energy, warm, very welcoming.
-                - Dialogue Strategy: Keep turns brief and breezy (1 to 3 sentences). Invite the user to share their thoughts.
-                - NEVER output markdown formatting, emojis, or parenthetical cues. Output ONLY direct spoken words.
-                """,
-            SuggestedTopics = ["Beach life & surfing", "Aussie wildlife", "Backpacking adventures", "Specialty coffee"]
-        },
-        new PersonaConfig
-        {
             Id = "in-priya",
             CountryCode = "IN",
             CountryName = "India",
@@ -155,9 +134,31 @@ public static class PersonaRegistry
         },
         new PersonaConfig
         {
-            Id = "cn-lin",
+            Id = "cn-zhang",
             CountryCode = "CN",
             CountryName = "China",
+            FlagEmoji = "🇨🇳",
+            Name = "Zhang Wei (张伟)",
+            Title = "Standard Mandarin Partner (Beijing)",
+            AccentDescription = "Standard Mandarin Chinese (标准普通话), natural conversational tone, friendly and articulate.",
+            ElevenLabsVoiceId = "21m00Tcm4TlvDq8ikWAM",
+            EdgeTtsVoiceName = "zh-CN-YunxiNeural",
+            InitialGreeting = "你好！很高兴和你开启中文交流。今天想聊点什么有趣的话题呢？",
+            SystemPrompt = """
+                You are Zhang Wei (张伟), a friendly, articulate 28-year-old product manager living in Beijing, China.
+                - Spoken Style: Speak 100% natural, authentic standard Mandarin Chinese (标准普通话). Use warm, idiomatic oral expressions, natural colloquial transition phrases (比如“确实”、“挺好的”、“对对对”、“说实话”), and standard pronunciation.
+                - Tone: Friendly, supportive, engaging, and easy to talk to. Keep turns concise (1 to 3 spoken sentences) to give the conversation partner plenty of speaking opportunities.
+                - Dialogue Strategy: Express interest in the partner's points and ask an open-ended conversational follow-up question.
+                - NEVER output English unless specifically asked to explain an English term.
+                - NEVER output markdown formatting (asterisks, bullet points), emojis, or stage directions. Output ONLY direct spoken words.
+                """,
+            SuggestedTopics = ["周末出游与生活漫谈", "北京胡同与特色美食", "职场日常与工作经验", "近期热点与兴趣爱好"]
+        },
+        new PersonaConfig
+        {
+            Id = "cnen-lin",
+            CountryCode = "CN-EN",
+            CountryName = "China (Bilingual)",
             FlagEmoji = "🇨🇳",
             Name = "Lin Wei (林薇)",
             Title = "Bilingual Coach & Translator (Shanghai)",
@@ -253,48 +254,48 @@ public static class PersonaRegistry
             {
                 "US" => "Hi, welcome! Thanks for coming in today. To kick off our interview, could you tell me a little about yourself and your professional background?",
                 "UK" => "Good day and welcome. Splendid to meet you. To begin our interview today, could you tell me a bit about your professional background?",
-                "AU" => "G'day! Thanks for dropping in for the interview today, mate. To kick things off, could you tell me a bit about yourself and your background?",
                 "IN" => "Hello and warm welcome! Thank you for joining this interview session today. Could you kindly walk me through your background and experience?",
                 "CA" => "Hi there, welcome! Thanks for meeting with me today, eh? To start off, could you tell me a bit about yourself and your work background?",
                 "RO" => "Salut and welcome! It is great to meet you today. To start our interview, could you share a bit about your background and experience?",
                 "UA" => "Warm greetings and welcome! Thank you for joining me today. Could you tell me a little about yourself and your professional background?",
-                "CN" => "Hello and welcome! 欢迎参加今天的英文求职面试模拟。To kick things off, could you tell me a little about yourself and your experience?",
+                "CN" => "你好，欢迎参加今天的中文面试。请先做个简短的自我介绍，聊聊你过往的工作经历和专业特长吧。",
+                "CN-EN" => "Hello and welcome! 欢迎参加今天的英文求职面试模拟。To kick things off, could you tell me a little about yourself and your experience?",
                 _ => scenario.InitialGreeting
             },
             "ielts-speaking" => country switch
             {
                 "US" => "Hello and welcome to this IELTS speaking practice session. Let's start with Part 1: Could you tell me about what you enjoy doing in your free time?",
                 "UK" => "Good day. Welcome to your IELTS speaking assessment. To begin with Part 1, could you tell me a little about your hometown and what you enjoy doing there?",
-                "AU" => "G'day! Welcome to your IELTS speaking practice today, mate. Let's jump into Part 1: What do you usually like to get up to on the weekends?",
                 "IN" => "Hello and welcome to this IELTS speaking test session. Kindly let us begin with Part 1: How do you spend your leisure time and weekends?",
                 "CA" => "Hi there! Welcome to the IELTS speaking practice. Let's start with Part 1: What kind of outdoor activities or hobbies do you enjoy the most, eh?",
                 "RO" => "Salut and welcome to this IELTS speaking simulation. Let us begin Part 1: What do you enjoy doing during your free time and weekends?",
                 "UA" => "Warm greetings! Welcome to our IELTS speaking practice. Let us begin Part 1: Could you tell me about your hometown and what you love about it?",
-                "CN" => "Hello and welcome! 欢迎来到雅思口语模拟实战。Let's begin with Part 1: What do you usually enjoy doing in your free time?",
+                "CN" => "你好，欢迎来到中文口语表达与交流练习。我们先从日常话题开始：平时周末你通常喜欢做些什么？",
+                "CN-EN" => "Hello and welcome! 欢迎来到雅思口语模拟实战。Let's begin with Part 1: What do you usually enjoy doing in your free time?",
                 _ => scenario.InitialGreeting
             },
             "travel-airport" => country switch
             {
                 "US" => "Hi there! Welcome to the information counter. How can I assist you with your flight or travel plans today?",
                 "UK" => "Good day! Welcome to our counter. How may I assist you with your travels or directions today?",
-                "AU" => "G'day mate! Welcome to our travel desk. How can I help you out with your trip or flight today?",
                 "IN" => "Hello and warm welcome! Welcome to our assistance desk. How may I help you with your journey or travel arrangements today?",
                 "CA" => "Hi there! Welcome to our travel service desk. How can I help you with your flights or hotel bookings today, eh?",
                 "RO" => "Salut! Welcome to the travel assistance counter. How may I help you with your flight or hotel reservations today?",
                 "UA" => "Warm greetings and welcome! How may I assist you with your flight tickets or travel itinerary today?",
-                "CN" => "Hello! 欢迎来到机场出行业务咨询台。How can I assist you with your flights or travel arrangements today?",
+                "CN" => "您好！欢迎来到机场出行业务咨询台。请问有什么可以协助您的？需要办理值机、托运还是查询航班信息？",
+                "CN-EN" => "Hello! 欢迎来到机场出行业务咨询台。How can I assist you with your flights or travel arrangements today?",
                 _ => scenario.InitialGreeting
             },
             "tech-discussion" => country switch
             {
                 "US" => "Morning everyone! Let's do our daily tech standup. What did you work on yesterday, and what are you tackling today?",
                 "UK" => "Good morning team. Let's have a quick standup sync. What did you manage to get done yesterday, and what's on your radar today?",
-                "AU" => "Morning team! Quick standup time, mates. What did you get sorted yesterday, and what are you cracking on with today?",
                 "IN" => "Good morning team! Let us do our daily sprint standup, ya. What was completed yesterday and what are your priorities for today?",
                 "CA" => "Morning team! Time for our daily standup, eh? What did you wrap up yesterday, and what are you working on today?",
                 "RO" => "Salut team! Let's sync up for our sprint standup. What did you work on yesterday, and what features are you focusing on today?",
                 "UA" => "Good morning team! Let's do our quick engineering sync. What did you accomplish yesterday, and what are your plans for today?",
-                "CN" => "Morning! 早上好，咱们开始今天的敏捷技术晨会。What did you work on yesterday and what's on your agenda today?",
+                "CN" => "大家早上好！开始咱们今天的敏捷技术晨会。请同步一下昨天完成了哪些工作，今天主要跟进什么任务？",
+                "CN-EN" => "Morning! 早上好，咱们开始今天的敏捷技术晨会。What did you work on yesterday and what's on your agenda today?",
                 _ => scenario.InitialGreeting
             },
             _ => persona.InitialGreeting ?? scenario.InitialGreeting

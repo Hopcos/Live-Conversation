@@ -1,115 +1,126 @@
-# LiveConversation AI - 网页真人英语模拟对话系统 (.NET 10)
+# LiveConversation AI - Real-time Voice Simulation System (.NET 10)
 
-一套基于 **.NET 10** 与 **现代 Web Audio / SignalR** 架构开发的高拟真、低延迟网页英语对话练习系统。
+[English](README.md) | [中文](README.zh.md)
 
-专为英语口语快速进阶设计，具备**多国口音与角色切换**、**多重防供应商锁定（支持 ElevenLabs、OpenAI 官方语音与 Edge-TTS 灵活切换）**、**极低延迟分句流式流水线**以及**双轨制 AI 伴学指导（实时语法纠正与地道表达推荐）**。
+A high-fidelity, ultra-low-latency real-time voice conversation practice system built on **.NET 10**, **SignalR**, and **modern Web Audio**.
+
+Engineered for accelerating spoken language mastery, featuring **multi-accent persona switching (including Standard Mandarin and Bilingual English-Mandarin)**, **anti-vendor-lockin multi-engine voice synthesis (ElevenLabs, OpenAI TTS, Edge-TTS, and Web Speech API)**, **flexible STT (Web Speech API & Whisper)**, an **ultra-low-latency streaming sentence-chunking pipeline**, a **dual-track AI Shadow Coach (real-time grammar correction, native phrasing alternatives, and deep explanations)**, and **full mobile & tablet responsive adaptation**.
 
 ---
 
-## 一、 系统架构特色与关键技术设计
-
-针对传统语音应用中常见的痛点，本项目在设计与实现上完成了以下关键技术突破：
+## 1. System Architecture & Key Engineering Highlights
 
 ```
                     ┌────────────────────────────────────────────────────────┐
-                    │               Web 前端 (浏览器)                        │
-                    │  Web Speech API (VAD)  <-> Web Audio 队列平滑播放      │
-                    │  (支持 Hands-Free 自由对讲 / Push-to-Talk / 动态水波球) │
+                    │            Web Frontend (Desktop / Mobile / Tablet)    │
+                    │  Web Speech / Whisper STT <-> Web Audio Smooth Queue   │
+                    │  (Hands-Free Auto-VAD / Push-to-Talk / Orb Visualizer) │
                     └───────────────────────────┬────────────────────────────┘
-                                                │ SignalR 全双工双向低延迟流
+                                                │ Full-duplex low-latency SignalR stream
                                                 ▼
                     ┌────────────────────────────────────────────────────────┐
-                    │               .NET 10 核心对话编排服务                  │
-                    │  (SentenceSegmenter 分句器 + CancellationToken 打断控制)│
+                    │               .NET 10 Conversation Orchestrator        │
+                    │ (SentenceSegmenter + CancellationToken Barge-in Ctrl)  │
                     └───────────────┬────────────────────────┬───────────────┘
                                     │                        │
-                   【主轨：低延迟语音对话】       【副轨：异步伴学分析】
+                      [Main Track: Low-latency Audio]  [Side Track: Async Shadow Coach]
                                     ▼                        ▼
-                       ┌─────────────────────────┐   ┌───────────────┐
-                       │  OpenAI / DeepSeek LLM  │   │ Shadow Coach  │
-                       └────────────┬────────────┘   │ (语法/表达指导)│
-                                    │ 分句流式送入   └───────┬───────┘
-                                    ▼                        │
-                       ┌─────────────────────────┐           │
-                       │    ITtsProvider 抽象     │           │
-                       └──────┬─────┬─────┬──────┘           │
-                              │     │     │                  │
-                              ▼     ▼     ▼                  │
-                         ElevenLabs │  Edge-TTS              │
-                       (当前高质量) │ (免费平替)             │
-                                    ▼                        │
-                               OpenAI TTS                    │
-                             (复用LLM订阅)                   │
-                              │     │     │                  │
-                              └─────┴──┬──┴──────────────────┘
-                                       │ 自包含 MP3 音频切片
-                                       ▼
+                        ┌─────────────────────────┐   ┌────────────────┐
+                        │  OpenAI / DeepSeek LLM  │   │  Shadow Coach  │
+                        └────────────┬────────────┘   │ (Grammar/Idiom)│
+                                     │ Sentence chunks└───────┬────────┘
+                                     ▼                        │
+                        ┌─────────────────────────┐           │
+                        │   ITtsProvider Abstr.   │           │
+                        └──────┬─────┬─────┬──────┘           │
+                               │     │     │                  │
+                               ▼     ▼     ▼                  │
+                          ElevenLabs │  Edge-TTS              │
+                        (Top Realism)│ (Free Neural)          │
+                                     ▼                        │
+                                OpenAI TTS                    │
+                             (Reuse LLM Key)                  │
+                               │     │     │                  │
+                               └─────┴──┬──┴──────────────────┘
+                                        │ Self-contained MP3 chunks
+                                        ▼
                     ┌────────────────────────────────────────────────────────┐
-                    │             推送到前端播放队列与伴学侧边栏              │
+                    │       Pushed to Client Audio Queue & Coach Sidebar      │
                     └────────────────────────────────────────────────────────┘
 ```
 
-1. **分句流式消费流水线 (Sentence Chunking Pipeline)**：
-   * 彻底避免浏览器 Web Audio API 直接解码截断 MP3 字节流时导致的 `EncodingError`。
-   * LLM 一旦生成完整首句，立即切片合成音频，用户在 **600~900ms 内即可听到真人回复**。
-2. **多重防供应商锁定（Anti-Vendor-Lockin）**：
-   * 系统通过 `ITtsProvider` 与 `TtsProviderFactory` 实现三引擎热切换：
-     * **ElevenLabs**：当前高质量订阅方案（支持 Turbo v2.5 模型）。
-     * **OpenAI TTS (`tts-1`)**：**直接复用您现有的 LLM 个人订阅 Key**，官方 API 高保真稳定输出，无需额外采购新账号。
-     * **Microsoft Edge-TTS**：纯 C# 原生 WebSocket 实现，支持微软神经网络母语发音。
-3. **即时打断机制（Barge-in / Interruption）**：
-   * 真实对话中，用户随时可能开口打断。后端为每个连接维护独立的 `CancellationTokenSource`，一旦检测到说话或点击打断，立即熔断后台 LLM 生成和 TTS 合成，同时清理前端播放队列。
-4. **双轨制影子教练（Shadow Coach）**：
-   * 采用旁路异步分析，在用户说话的同时在副轨发起语法与表达分析，**完全不占用对话主链路的响应时间**。
+1. **Streaming Sentence-Chunking Pipeline**:
+   * Eliminates browser `EncodingError` exceptions caused by attempting to decode sliced MP3 byte streams directly.
+   * As soon as the LLM finishes the first complete sentence, audio synthesis kicks off immediately, allowing users to hear spoken responses within **600–900ms**.
+2. **Dual-Engine Speech-to-Text (Web Speech API & Whisper)**:
+   * **Web Speech API**: In-browser native recognition, zero latency, and zero token costs.
+   * **Whisper STT**: Seamless integration with Groq Whisper (`whisper-large-v3`, `whisper-large-v3-turbo`) or OpenAI Whisper, featuring configurable endpoint, API key, and model overrides for rock-solid transcription across accents and background noise.
+3. **Anti-Vendor-Lockin TTS Matrix**:
+   * Switch dynamically between four voice synthesis backends:
+     * **ElevenLabs**: High-fidelity realism (supporting Turbo v2.5).
+     * **OpenAI TTS (`tts-1`)**: Directly reuse your existing LLM API key with zero new account signups.
+     * **Microsoft Edge-TTS**: Pure C# native WebSocket implementation with lifelike Microsoft neural voices—completely free.
+     * **Web Speech API**: In-browser client-side fallback.
+4. **Instant Barge-in & Acoustic Echo Loop Prevention**:
+   * Dedicated `CancellationTokenSource` per connection enables immediate cancellation of backend LLM generation and TTS rendering whenever user speech or manual interruption is detected.
+   * **Echo Prevention**: In Hands-Free mode, mic listening is automatically locked while AI audio is playing, followed by a debounce cooldown before reactivating, eliminating speaker-to-mic feedback loops.
+5. **Language-Adaptive Shadow Coach**:
+   * Runs asynchronously on a decoupled side track without delaying spoken conversational replies.
+   * **Language Adaptive**: When practicing with Chinese (`CN`) or Bilingual (`CN-EN`) personas in Mandarin, the coach automatically uses dedicated Mandarin prompts to deliver natural Chinese corrections and phrasing suggestions rather than mistakenly translating the speech into English.
 
 ---
 
-## 二、 多国口音与角色矩阵
+## 2. Multi-Accent & Persona Matrix
 
-| 口音/国家 | 角色名称 | 角色背景 | ElevenLabs 预设 Voice | OpenAI TTS 映射 | Edge-TTS 映射 | 教学与口语特征 |
+| Accent / Code | Persona Name | Background | ElevenLabs Voice | OpenAI TTS | Edge-TTS | Pedagogical & Spoken Style |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **🇺🇸 美国 (US)** | **Rachel Vance** | 纽约曼哈顿科技白领 | `21m00Tcm4TlvDq8ikWAM` | `alloy` | `en-US-JennyNeural` | 美语连读、弱读与现代职场/生活日常口语 |
-| **🇬🇧 英国 (UK)** | **Arthur Pendelton** | 伦敦/牛津文学文化学者 | `JBFqnCBsd6RMkjVDRZzb` | `fable` | `en-GB-RyanNeural` | 纯正英音 RP 发音、雅思口语与严谨表达 |
-| **🇦🇺 澳大利亚 (AU)** | **Liam O'Connor** | 悉尼冲浪与旅行博主 | `VR6AewLTigWG4xSOukaG` | `echo` | `en-AU-WilliamNeural` | 澳洲英语升调、特有俚语与英联邦口音适应 |
-| **🇮🇳 印度 (IN)** | **Priya Sharma** | 班加罗尔首席软件架构师 | `EXAVITQu4vr4xnSDxMaL` | `shimmer` | `en-IN-NeerjaNeural` | 突破跨国远程工作中全球最普遍但最难辨析的口音 |
-| **🇨🇦 加拿大 (CA)** | **Chloe Tremblay** | 温哥华环保学者与户外向导 | `AZnzlk1XvdvUeBnXmlld` | `nova` | `en-CA-ClaraNeural` | 纯净清晰发音，适合初学者过渡练习 |
-| **🇷🇴 罗马尼亚 (RO)** | **Elena Radu** | 布加勒斯特数字技术架构师 | `EXAVITQu4vr4xnSDxMaL` | `shimmer` | `en-US-JennyNeural` | 东欧罗曼语族口音（清晰卷舌、精炼重音），适合跨国欧企交流 |
-| **🇺🇦 乌克兰 (UA)** | **Oksana Kovalenko** | 基辅跨境远程工程师 | `AZnzlk1XvdvUeBnXmlld` | `nova` | `en-GB-RyanNeural` | 斯拉夫语族英语发音风格（辅音硬朗），适应全球分布式开发团队 |
-| **🇨🇳 中英双语 (CN)** | **Lin Wei (林薇)** | 上海资深口语伴学导师 | `21m00Tcm4TlvDq8ikWAM` | `alloy` | `zh-CN-XiaoxiaoNeural` | 中英双语流畅切换、中文解析知识点与语法，零压力过渡练习 |
+| **🇺🇸 United States (US)** | **Rachel Vance** | Manhattan Tech Professional | `21m00Tcm4TlvDq8ikWAM` | `alloy` | `en-US-JennyNeural` | American connected speech, reductions, contractions, and modern workplace dialogue |
+| **🇬🇧 United Kingdom (UK)**| **Arthur Pendelton** | Oxford Literature & Culture Tutor | `JBFqnCBsd6RMkjVDRZzb` | `fable` | `en-GB-RyanNeural` | British Received Pronunciation (RP), IELTS speaking fluency, and refined idioms |
+| **🇮🇳 India (IN)** | **Priya Sharma** | Bengaluru Principal Architect | `onwK4e9ZLuTAKqWW03F9` | `shimmer` | `en-IN-NeerjaNeural` | South Asian English articulation, cadence, and multinational tech communication |
+| **🇨🇦 Canada (CA)** | **Chloe Tremblay** | Vancouver Environmental Scientist | `AZnzlk1XvdvUeBnXmlld` | `nova` | `en-CA-ClaraNeural` | Clean, polite Canadian accent and conversational markers (`eh?`, `for sure`) |
+| **🇷🇴 Romania (RO)** | **Elena Radu** | Bucharest Tech Blogger & Engineer | `XB0fDUnXU5powFXDhCwa` | `alloy` | `en-IE-EmilyNeural` | Clear Eastern European / Romance-influenced cadence, ideal for Euro-tech workplaces |
+| **🇺🇦 Ukraine (UA)** | **Oksana Kovalenko** | Kyiv Creative Designer & Tutor | `XB0fDUnXU5powFXDhCwa` | `fable` | `en-GB-SoniaNeural` | Warm, melodic Slavic English cadence, supportive and patient for language learners |
+| **🇨🇳 Mandarin Chinese (CN)**| **Zhang Wei (张伟)** | Beijing Product Manager | `21m00Tcm4TlvDq8ikWAM` | `alloy` | `zh-CN-YunxiNeural` | Standard Mandarin Chinese, authentic oral expressions, daily life & career discussions |
+| **🇨🇳 Bilingual (CN-EN)** | **Lin Wei (林薇)** | Shanghai Bilingual Oral Coach | `21m00Tcm4TlvDq8ikWAM` | `nova` | `zh-CN-XiaoxiaoNeural` | Fluent bilingual English & Mandarin switching, pronunciation coaching, grammar breakdown |
 
 ---
 
-## 三、 快速启动与运行指南
+## 3. Practice Scenarios
 
-### 1. 前置环境
-* 已安装 **.NET 10 SDK** (可以通过 `dotnet --version` 验证，支持 10.0.401 及以上)。
-* 推荐浏览器：**Google Chrome** 或 **Microsoft Edge**（原生完整支持 Web Speech API 与 Web Audio API）。
+1. ☕ **Casual Coffee Chat (`daily-chat`)**: Low-pressure small talk about daily routines, hobbies, movies, and weekend trips.
+2. 💼 **Job Interview Practice (`job-interview`)**: Professional behavioral questions, STAR method responses, and problem-solving simulations.
+3. 🎓 **IELTS Speaking Prep (`ielts-speaking`)**: Part 2 & Part 3 practice, expanding arguments, cohesive devices, and abstract discussion.
+4. ✈️ **Travel & Hotel Check-in (`travel-airport`)**: Airport check-in, immigration counters, hotel reservations, and handling flight delays.
+5. 💻 **Tech & Product Standup (`tech-discussion`)**: Agile sprint standups, architectural trade-offs, API discussions, and blocker resolution.
 
-### 2. 运行应用
-在项目根目录下执行：
+---
 
-```bash
+## 4. Quick Start Guide
+
+### Prerequisites
+* **.NET 10 SDK** (v10.0.401 or later).
+* Recommended browsers: **Google Chrome**, **Microsoft Edge**, or modern mobile browsers (Safari / Chrome for Mobile).
+
+### Running the Application
+
+```powershell
 dotnet run --project src/LiveConversation.Web
 ```
 
-启动后在浏览器打开：👉 **`http://localhost:5000`**
+Open your browser at: 👉 **`http://localhost:5067`** (or the port defined in launchSettings)
 
-### 3. 配置您的 API Key（两种方式）
+### Configuration Options
 
-#### 方式一：直接在网页 UI 中配置（最推荐，即改即用）
-1. 打开网页右上角 **⚙️ Settings**。
-2. 填写您的 LLM 配置：
-   * **Endpoint**：默认 `https://api.openai.com/v1`（如使用 DeepSeek 可填 `https://api.deepseek.com/v1`）。
-   * **API Key**：您的 LLM API Key。
-   * **Model**：`gpt-4o-mini` 或 `deepseek-chat` 等。
-3. 选择您想使用的 TTS 引擎：
-   * **ElevenLabs**：填入您的 ElevenLabs Key，享受顶级拟真发音。
-   * **OpenAI TTS**：直接复用您的 LLM Key，官方原生高音质输出。
-   * **Edge-TTS**：免费神经语音。
-4. 点击 **🔊 Test Voice** 实时测试当前选择的语音效果，点击 **Save Changes** 自动持久化在浏览器本地。
+#### Option A: Interactive In-Browser Settings (Recommended)
+1. Click the **⚙️ Settings** button at the top right (draggable and top-aligned for quick access).
+2. Under **LLM Settings**, enter your endpoint, API key, and model (compatible with OpenAI, DeepSeek, Groq, and any OpenAI-compatible provider).
+3. Under **TTS Settings**, choose between ElevenLabs, OpenAI TTS, Edge-TTS, or Web Speech API. Click **🔊 Test Voice** to preview audio.
+4. Under **STT Settings**, select Web Speech API or Whisper (configure Groq Whisper or OpenAI Whisper endpoints).
+5. Click **Save Changes**—settings are automatically persisted to LocalStorage.
 
-#### 方式二：在服务端 `appsettings.json` 中配置
-直接修改 [`src/LiveConversation.Web/appsettings.json`](file:///e:/Personal/LiveConversation/src/LiveConversation.Web/appsettings.json)：
+#### Option B: Server-Side `appsettings.json`
+Configure default keys directly in [`src/LiveConversation.Web/appsettings.json`](src/LiveConversation.Web/appsettings.json):
+
 ```json
 {
   "AppSettings": {
@@ -123,8 +134,13 @@ dotnet run --project src/LiveConversation.Web
       "ApiKey": "xi-your-elevenlabs-key",
       "ModelId": "eleven_turbo_v2_5"
     },
+    "Whisper": {
+      "Endpoint": "https://api.groq.com/openai/v1",
+      "ApiKey": "gsk_your_groq_whisper_key",
+      "ModelId": "whisper-large-v3-turbo"
+    },
     "Tts": {
-      "ActiveProvider": "ElevenLabs"
+      "ActiveProvider": "EdgeTts"
     }
   }
 }
@@ -132,50 +148,52 @@ dotnet run --project src/LiveConversation.Web
 
 ---
 
-## 四、 现代交互与定制化特性
+## 5. Modern Interaction & Customization Features
 
-* **多主题换肤 (Theme Switching)**：导航栏提供 4 套高对比度舒适配色，一键即时切换并自动持久化：
-  * 🌌 **深邃星空 (Cosmic Dark)**（默认沉浸暗黑）
-  * 🌲 **赛博翡翠 (Cyber Emerald)**（现代科技极客绿）
-  * 🌆 **极夜紫晶 (Midnight Purple)**（高雅午夜紫）
-  * ☀️ **极简纯白 (Modern Light)**（清新明亮日间模式）
-* **中英文双语界面 (Bilingual UI)**：点击顶部 `🇨🇳 中文 / 🇺🇸 English` 按钮实现全界面毫秒级无损多语言切换。
-* **中文语音输入 (STT) 与中文语音合成 (TTS)**：
-  * **中文 STT 识别**：顶部配备拾音语种下拉框（`Auto 自动匹配` / `en-US 纯英` / `zh-CN 中文普通话`），支持直接用中文与发音人交流或寻求翻译帮助。
-  * **中文 TTS 朗读**：选用 🇨🇳 **Lin Wei (林薇)** 或切换语种时，AI 能以纯正母语标准普通话进行中英混说教学，深度剖析语法要点与词根起源。
-* **双手自由对讲 (Hands-Free)**：点击麦克风开启，系统自动监听说话；检测到说话停顿约 900ms 时自动提交，真人语音回复完毕后自动恢复监听。
-* **按键对讲模式 (Push-to-Talk)**：长按空格键或按住麦克风说话，松开即刻发送。
-* **随时打断 (Barge-in)**：在对方说话时按下空格键或点击 **🛑 Interrupt** 按钮，立即打断并停止对方发音。
-* **慢速重播 (0.8x)**：对 AI 回复气泡右上角的 `🔊 Replay (0.8x)` 点击即可慢速复读听清连读细节。
-* **伴学侧边栏**：点击右上角 **🧠 AI Shadow Coach** 切换查看每句话的语法纠偏、地道替换词及中文深度解析。
+* **4 Curated Color Themes**:
+  * 🌌 **Cosmic Dark** (Default immersive dark mode)
+  * 🌲 **Cyber Emerald** (Tech-focused emerald green)
+  * 🌆 **Midnight Purple** (Sophisticated nocturnal purple)
+  * ☀️ **Modern Light** (Clean, contemporary daylight styling)
+* **Mobile & Tablet Adaptation**:
+  * Responsive layouts for phone and tablet screens with touch gesture support;
+  * Independent scrolling containers for dialogue and coaching streams with draggable settings modal;
+  * Floating "Back to Top" button for quick navigation.
+* **Instant Bilingual Interface**: Click `🇨🇳 中文 / 🇺🇸 English` in the header for real-time localized labels.
+* **Dual Interaction Modes**:
+  * **Hands-Free**: Speak naturally with auto-VAD silence detection and dynamic audio orb visualizer.
+  * **Push-to-Talk**: Hold Spacebar or press the microphone button to record, release to send.
+* **Slow Replay (0.8x)**: Click `🔊 Replay (0.8x)` on any assistant bubble to hear connected speech and phonetics slowly.
 
 ---
 
-## 五、 测试工程与测试闭环 (Unit & Integration Tests)
+## 6. Testing
 
-系统包含专门的测试工程 [`tests/LiveConversation.Tests`](file:///e:/Personal/LiveConversation/tests/LiveConversation.Tests)，形成完整的自动化回归验证闭环：
+The solution includes a full automated test suite in [`tests/LiveConversation.Tests`](tests/LiveConversation.Tests):
 
-```bash
-# 运行全部 37 项单元与集成测试
+```powershell
 dotnet test
 ```
 
-### 测试矩阵说明
-1. **单元测试 (Unit Tests)**：
-   * `SentenceSegmenterTests`：验证流式输出断句的准确性，包含缩写词（如 `Dr.`、`U.S.`）、小数点、省略号及末尾 Flush 缓冲保护。
-   * `PersonaRegistryTests`：验证 8 国口音角色（美、英、澳、印、加、罗、乌、中）与 5 大情景模式配置的完整性及双引擎 Voice 映射。
-   * `TtsProviderFactoryTests`：验证动态工厂对大小写不敏感匹配、引擎热切换及向后兼容平替降级机制。
-2. **集成测试 (Integration Tests)**：
-   * `ApiEndpointsTests`：基于 `WebApplicationFactory<Program>` 启动真实内存 Web 服务器，验证 `/api/personas`（含新角色）、`/api/scenarios`、`/api/config` 及 `/index.html` 静态页面可访问性。
-   * `TtsEngineIntegrationTests`：验证 ASP.NET Core 10 依赖注入容器是否正确装配所有 TTS 实现类（`ElevenLabsTtsProvider`、`EdgeTtsProvider`、`OpenAiTtsProvider`）与工厂类，并对缺失 Key 的安全防御性报错进行了断言验证。
+47 passing tests cover both unit and integration pipelines:
+- **Sentence Segmenter Pipeline** (`SentenceSegmenterTests`): Validates streaming punctuation boundaries, abbreviations (`Dr.`, `U.S.`), ellipses, and tail flushing.
+- **Persona & Scenario Matrix** (`PersonaRegistryTests`): Ensures validity of all 8 personas, scenario greetings, and TTS voice bindings.
+- **Coach Feedback Data Contracts** (`CoachFeedbackSerializationTests`): Asserts JSON schema parsing for both English and Chinese coaching outputs.
+- **API Endpoint Tests** (`ApiEndpointsTests`): Boots in-memory `WebApplicationFactory` to verify `/api/personas`, `/api/scenarios`, and static asset serving.
+- **TTS Engine Assembly** (`TtsEngineIntegrationTests`): Confirms DI container resolution for ElevenLabs, Edge-TTS, and OpenAI TTS providers.
 
 ---
 
-## 六、 常见问题与排查 (FAQ)
+## License
 
-1. **初次进入麦克风无法拾音？**
-   * 请在浏览器弹出的麦克风授权弹窗中选择“允许”。Web Speech API 要求运行在 `localhost` 或安全 HTTPS 协议下。
-2. **ElevenLabs 订阅到期后如何无痛平替？**
-   * 进入网页右上角 **⚙️ Settings**，将 TTS Voice Engine 切换为 **OpenAI TTS**（直接利用您现存的 LLM 订阅）或 **Edge-TTS** 即可，不需要更换系统，完全零额外开销。
-3. **支持修改对话场景与角色吗？**
-   * 支持。所有角色的提示词与场景配置均在 [`PersonaRegistry.cs`](file:///e:/Personal/LiveConversation/src/LiveConversation.Web/Services/Personas/PersonaRegistry.cs) 中集中声明，可按需添加雅思专项、外企晋升汇报等任意定制场景。
+Licensed under the [Apache License, Version 2.0](LICENSE) (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.

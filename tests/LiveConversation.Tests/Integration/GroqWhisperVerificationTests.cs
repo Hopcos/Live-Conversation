@@ -27,12 +27,14 @@ public class GroqWhisperVerificationTests
         _output.WriteLine($"Synthetic audio generated: {audioBytes.Length} bytes.");
 
         // 2. Configure WhisperSttService for Groq
+        var testApiKey = Environment.GetEnvironmentVariable("GROQ_API_KEY") ?? "gsk_test_placeholder_key";
+
         var appSettings = Options.Create(new AppSettings
         {
             Whisper = new WhisperOptions
             {
                 Endpoint = "https://api.groq.com/openai/v1",
-                ApiKey = "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",
+                ApiKey = testApiKey,
                 ModelId = modelId
             }
         });
@@ -42,7 +44,7 @@ public class GroqWhisperVerificationTests
         var clientSettings = new ClientSettings
         {
             WhisperEndpoint = "https://api.groq.com/openai/v1",
-            WhisperApiKey = "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",
+            WhisperApiKey = testApiKey,
             WhisperModel = modelId,
             SttLanguage = "en"
         };

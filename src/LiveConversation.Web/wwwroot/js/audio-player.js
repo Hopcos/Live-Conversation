@@ -240,11 +240,11 @@ class AudioPlayer {
         const langMap = {
             'UK': ['en-GB', 'en-IE'],
             'GB': ['en-GB', 'en-IE'],
-            'AU': ['en-AU', 'en-NZ'],
             'IN': ['en-IN', 'hi-IN'],
             'CA': ['en-CA', 'en-US'],
             'US': ['en-US'],
             'CN': ['zh-CN', 'zh'],
+            'CN-EN': ['zh-CN', 'zh', 'en-US', 'en'],
             'RO': ['ro-RO', 'ro'],
             'UA': ['uk-UA', 'uk']
         };
@@ -259,11 +259,11 @@ class AudioPlayer {
         // 2. Keyword in voice name
         const namePatterns = {
             'UK': ['united kingdom', 'great britain', 'uk', 'george', 'susan', 'oliver'],
-            'AU': ['australia', 'australian', 'catherine', 'james'],
             'IN': ['india', 'indian', 'ravi', 'heera', 'neerja'],
             'CA': ['canada', 'canadian', 'clara'],
             'US': ['united states', 'david', 'zira', 'jenny', 'mark'],
-            'CN': ['chinese', 'china', 'mandarin', 'xiaoxiao', 'huihui'],
+            'CN': ['chinese', 'china', 'mandarin', 'xiaoxiao', 'huihui', 'yunxi', 'yunjian', 'yaoyao'],
+            'CN-EN': ['chinese', 'china', 'mandarin', 'xiaoxiao', 'huihui'],
             'RO': ['romania', 'romanian'],
             'UA': ['ukraine', 'ukrainian']
         };
@@ -308,8 +308,8 @@ class AudioPlayer {
             const utterance = new SpeechSynthesisUtterance(text);
             const code = (countryCode || 'US').toUpperCase();
             const defaultLang = {
-                'UK': 'en-GB', 'GB': 'en-GB', 'AU': 'en-AU', 'IN': 'en-IN',
-                'CA': 'en-CA', 'CN': 'zh-CN', 'RO': 'ro-RO', 'UA': 'uk-UA', 'US': 'en-US'
+                'UK': 'en-GB', 'GB': 'en-GB', 'IN': 'en-IN',
+                'CA': 'en-CA', 'CN': 'zh-CN', 'CN-EN': 'zh-CN', 'RO': 'ro-RO', 'UA': 'uk-UA', 'US': 'en-US'
             }[code] || 'en-US';
 
             const voice = this.findWebSpeechVoice(countryCode);

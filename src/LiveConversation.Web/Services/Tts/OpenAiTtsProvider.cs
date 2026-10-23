@@ -50,10 +50,10 @@ public class OpenAiTtsProvider : ITtsProvider
         var voice = profile.CountryCode switch
         {
             "UK" => "fable",    // British-like accent
-            "AU" => "echo",
             "IN" => "shimmer",
             "CA" => "nova",
-            "CN" => "nova",     // Bilingual English & Chinese
+            "CN" => "alloy",     // Standard Chinese Mandarin
+            "CN-EN" => "nova",  // Bilingual English & Chinese
             "RO" => "alloy",
             "UA" => "fable",
             _ => "alloy"        // Standard American

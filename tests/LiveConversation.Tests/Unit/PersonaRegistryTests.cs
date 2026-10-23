@@ -13,23 +13,23 @@ public class PersonaRegistryTests
         var countryCodes = personas.Select(p => p.CountryCode).ToList();
         Assert.Contains("US", countryCodes);
         Assert.Contains("UK", countryCodes);
-        Assert.Contains("AU", countryCodes);
         Assert.Contains("IN", countryCodes);
         Assert.Contains("CA", countryCodes);
         Assert.Contains("RO", countryCodes);
         Assert.Contains("UA", countryCodes);
         Assert.Contains("CN", countryCodes);
+        Assert.Contains("CN-EN", countryCodes);
     }
 
     [Theory]
     [InlineData("US", "Rachel Vance", "en-US-JennyNeural")]
     [InlineData("UK", "Arthur Pendelton", "en-GB-RyanNeural")]
-    [InlineData("AU", "Liam O'Connor", "en-AU-WilliamNeural")]
     [InlineData("IN", "Priya Sharma", "en-IN-NeerjaNeural")]
     [InlineData("CA", "Chloe Tremblay", "en-CA-ClaraNeural")]
     [InlineData("RO", "Elena Radu", "en-IE-EmilyNeural")]
     [InlineData("UA", "Oksana Kovalenko", "en-GB-SoniaNeural")]
-    [InlineData("CN", "Lin Wei (林薇)", "zh-CN-XiaoxiaoNeural")]
+    [InlineData("CN", "Zhang Wei (张伟)", "zh-CN-YunxiNeural")]
+    [InlineData("CN-EN", "Lin Wei (林薇)", "zh-CN-XiaoxiaoNeural")]
     public void GetPersona_KnownCountry_ReturnsCorrectPersonaAndVoiceMapping(
         string countryCode, 
         string expectedName, 

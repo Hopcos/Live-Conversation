@@ -28,17 +28,34 @@ document.addEventListener('DOMContentLoaded', async () => {
             el.textContent = i18n.t('replay_btn');
         });
         document.querySelectorAll('.coach-hint-lbl').forEach(el => {
-            el.textContent = i18n.t('coach_hint_label');
+            if (el.getAttribute('data-lang') === 'zh') {
+                el.textContent = '💡 纠偏建议:';
+            } else {
+                el.textContent = i18n.t('coach_hint_label');
+            }
         });
         document.querySelectorAll('.coach-hint-switch').forEach(el => {
-            el.textContent = i18n.t('coach_hint_switch');
+            if (el.getAttribute('data-lang') === 'zh') {
+                el.textContent = '👉 点击切换到右侧【AI 影子伴学】查看深度解析';
+            } else {
+                el.textContent = i18n.t('coach_hint_switch');
+            }
         });
         document.querySelectorAll('.coach-hint-praise').forEach(el => {
-            el.textContent = i18n.t('coach_hint_praise');
+            if (el.getAttribute('data-lang') === 'zh') {
+                el.textContent = '✨ 表达规范地道！地道推荐:';
+            } else {
+                el.textContent = i18n.t('coach_hint_praise');
+            }
         });
         document.querySelectorAll('.coach-badge').forEach(el => {
+            const isZh = el.getAttribute('data-lang') === 'zh';
             const hasIssues = el.getAttribute('data-has-issues') === 'true';
-            el.textContent = hasIssues ? i18n.t('coach_badge_needs_polish') : i18n.t('coach_badge_natural');
+            if (isZh) {
+                el.textContent = hasIssues ? '待润色提高' : '表达自然地道';
+            } else {
+                el.textContent = hasIssues ? i18n.t('coach_badge_needs_polish') : i18n.t('coach_badge_natural');
+            }
         });
     }
 
@@ -521,14 +538,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         const emptyState = document.getElementById('coach-empty-state');
         if (emptyState) emptyState.classList.add('hidden');
 
+        const isChinese = feedback.language === 'zh' || /[\u4e00-\u9fa5]/.test(feedback.originalText || '') || state.currentCountry === 'CN';
+
         const card = document.createElement('div');
         card.className = 'bg-slate-800/90 border border-slate-700/80 rounded-xl p-4 mb-3 shadow-lg animate-fade-in';
 
-        const badgeText = feedback.hasIssues ? i18n.t('coach_badge_needs_polish') : i18n.t('coach_badge_natural');
+        const badgeText = isChinese
+            ? (feedback.hasIssues ? '待润色提高' : '表达自然地道')
+            : (feedback.hasIssues ? i18n.t('coach_badge_needs_polish') : i18n.t('coach_badge_natural'));
         const badgeClass = feedback.hasIssues 
             ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' 
             : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30';
-        const badge = `<span class="coach-badge px-2 py-0.5 rounded text-xs border ${badgeClass}" data-has-issues="${feedback.hasIssues}">${badgeText}</span>`;
+        const badge = `<span class="coach-badge px-2 py-0.5 rounded text-xs border ${badgeClass}" data-lang="${isChinese ? 'zh' : 'en'}" data-has-issues="${feedback.hasIssues}">${badgeText}</span>`;
+
+        const corrLbl = isChinese ? '语法与句式修正：' : i18n.t('coach_correction');
+        const nativeLbl = isChinese ? '母语级地道表达：' : i18n.t('coach_native');
+        const explLbl = isChinese ? '💡 深度解析：' : i18n.t('coach_explanation');
+        const spotLbl = isChinese ? '🌟 亮点习语：' : i18n.t('coach_spotlight');
 
         card.innerHTML = `
             <div class="flex items-center justify-between mb-2">
@@ -537,21 +563,21 @@ document.addEventListener('DOMContentLoaded', async () => {
             </div>
             ${feedback.correctedText ? `
             <div class="mb-2">
-                <div class="text-xs text-slate-400 font-medium" data-i18n="coach_correction">${i18n.t('coach_correction')}</div>
+                <div class="text-xs text-slate-400 font-medium" ${isChinese ? 'data-lang="zh"' : 'data-i18n="coach_correction"'}>${corrLbl}</div>
                 <div class="text-sm text-emerald-400 font-medium">${escapeHtml(feedback.correctedText)}</div>
             </div>` : ''}
             ${feedback.nativeAlternative ? `
             <div class="mb-2">
-                <div class="text-xs text-slate-400 font-medium" data-i18n="coach_native">${i18n.t('coach_native')}</div>
+                <div class="text-xs text-slate-400 font-medium" ${isChinese ? 'data-lang="zh"' : 'data-i18n="coach_native"'}>${nativeLbl}</div>
                 <div class="text-sm text-indigo-300 font-medium">${escapeHtml(feedback.nativeAlternative)}</div>
             </div>` : ''}
             ${feedback.explanation ? `
             <div class="text-xs text-slate-300 bg-slate-900/60 p-2.5 rounded-lg border border-slate-700/50 mt-2">
-                <span class="text-indigo-400 font-semibold" data-i18n="coach_explanation">${i18n.t('coach_explanation')} </span>${escapeHtml(feedback.explanation)}
+                <span class="text-indigo-400 font-semibold" ${isChinese ? 'data-lang="zh"' : 'data-i18n="coach_explanation"'}>${explLbl} </span>${escapeHtml(feedback.explanation)}
             </div>` : ''}
             ${feedback.vocabularyHighlight ? `
             <div class="mt-2 text-xs text-slate-400">
-                <span class="text-amber-400 font-medium" data-i18n="coach_spotlight">${i18n.t('coach_spotlight')} </span> <span class="text-slate-200 underline decoration-indigo-500 underline-offset-2">${escapeHtml(feedback.vocabularyHighlight)}</span>
+                <span class="text-amber-400 font-medium" ${isChinese ? 'data-lang="zh"' : 'data-i18n="coach_spotlight"'}>${spotLbl} </span> <span class="text-slate-200 underline decoration-indigo-500 underline-offset-2">${escapeHtml(feedback.vocabularyHighlight)}</span>
             </div>` : ''}
         `;
 
@@ -579,19 +605,24 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (innerBox && !innerBox.querySelector('.coach-hint-box')) {
                     const hintDiv = document.createElement('div');
                     hintDiv.className = 'coach-hint-box mt-2 pt-2 border-t border-indigo-400/40 flex flex-col space-y-1 text-xs cursor-pointer hover:bg-indigo-700/60 p-1.5 rounded-lg transition';
+                    const hintLbl = isChinese ? '💡 纠偏建议:' : i18n.t('coach_hint_label');
+                    const hintSwitch = isChinese ? '👉 点击切换到右侧【AI 影子伴学】查看深度解析' : i18n.t('coach_hint_switch');
+                    const hintPraise = isChinese ? '✨ 表达规范地道！地道推荐:' : i18n.t('coach_hint_praise');
+                    const langAttr = isChinese ? 'data-lang="zh"' : 'data-lang="en"';
+
                     if (feedback.hasIssues) {
                         hintDiv.innerHTML = `
                             <div class="flex items-center space-x-1.5 text-amber-200 font-medium">
-                                <span class="coach-hint-lbl" data-i18n="coach_hint_label">${i18n.t('coach_hint_label')}</span>
+                                <span class="coach-hint-lbl" ${langAttr} data-i18n="coach_hint_label">${hintLbl}</span>
                                 <span class="underline decoration-amber-400">${escapeHtml(feedback.correctedText || '')}</span>
                             </div>
-                            <div class="text-[11px] text-indigo-200 coach-hint-switch" data-i18n="coach_hint_switch">${i18n.t('coach_hint_switch')}</div>
+                            <div class="text-[11px] text-indigo-200 coach-hint-switch" ${langAttr} data-i18n="coach_hint_switch">${hintSwitch}</div>
                         `;
                     } else {
                         hintDiv.innerHTML = `
                             <div class="flex items-center space-x-1.5 text-emerald-200 text-[11px]">
                                 <span>✨</span>
-                                <span class="coach-hint-praise" data-i18n="coach_hint_praise">${i18n.t('coach_hint_praise')}</span>
+                                <span class="coach-hint-praise" ${langAttr} data-i18n="coach_hint_praise">${hintPraise}</span>
                                 <span class="font-medium">${escapeHtml(feedback.nativeAlternative || '')}</span>
                             </div>
                         `;
@@ -609,7 +640,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         if (feedback.hasIssues) {
-            showNotification(i18n.t('coach_notification_detected'), 'warning');
+            const notifMsg = isChinese ? '💡 AI 影子伴学：检测到表达建议，已生成纠偏卡片！' : i18n.t('coach_notification_detected');
+            showNotification(notifMsg, 'warning');
         }
     }
 
@@ -618,7 +650,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!topicsContainer) return;
         topicsContainer.innerHTML = '';
 
-        const isCn = (persona?.countryCode === 'CN') || i18n.currentLang === 'zh';
+        const isCn = (persona?.countryCode === 'CN' || persona?.countryCode === 'CN-EN') || i18n.currentLang === 'zh';
         const sceneId = scenario?.id || state.currentScene || 'daily-chat';
 
         const scenarioTopicsMap = {
@@ -645,7 +677,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             pill.className = 'text-xs px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700/60 transition cursor-pointer hover:scale-[1.02] shadow-sm';
             pill.textContent = topic;
             pill.onclick = () => {
-                if (state.currentCountry === 'CN') {
+                if (state.currentCountry === 'CN' || state.currentCountry === 'CN-EN') {
                     sendUserSpeech(`你好！我想和你围绕“${topic}”展开交流。`);
                 } else {
                     sendUserSpeech(`Let's discuss "${topic}". What are your thoughts on this?`);
@@ -823,9 +855,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function getPersonaTooltipInfo(countryCode) {
-        const flagMap = { 'US': '🇺🇸', 'UK': '🇬🇧', 'AU': '🇦🇺', 'IN': '🇮🇳', 'CA': '🇨🇦', 'RO': '🇷🇴', 'UA': '🇺🇦', 'CN': '🇨🇳' };
-        const nameKey = `persona_name_${countryCode}`;
-        const descKey = `persona_desc_${countryCode}`;
+        const flagMap = { 'US': '🇺🇸', 'UK': '🇬🇧', 'IN': '🇮🇳', 'CA': '🇨🇦', 'RO': '🇷🇴', 'UA': '🇺🇦', 'CN': '🇨🇳', 'CN-EN': '🇨🇳' };
+        const safeCode = (countryCode || '').replace(/-/g, '_');
+        const nameKey = `persona_name_${safeCode}`;
+        const descKey = `persona_desc_${safeCode}`;
 
         let title = i18n.t(nameKey);
         let desc = i18n.t(descKey);
@@ -915,6 +948,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             btn.classList.remove('bg-slate-800', 'text-slate-300');
 
             state.currentCountry = country;
+
+            // If switching to Chinese or Chinese Bilingual mode, activate Chinese UI if not already
+            if ((country === 'CN' || country === 'CN-EN') && typeof i18n !== 'undefined' && i18n.currentLang !== 'zh') {
+                i18n.setLanguage('zh');
+            }
+
             await initSession();
         });
     });

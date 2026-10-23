@@ -31,12 +31,12 @@ public class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.NotEmpty(personas);
         Assert.Contains(personas, p => p.CountryCode == "US");
         Assert.Contains(personas, p => p.CountryCode == "UK");
-        Assert.Contains(personas, p => p.CountryCode == "AU");
         Assert.Contains(personas, p => p.CountryCode == "IN");
         Assert.Contains(personas, p => p.CountryCode == "CA");
         Assert.Contains(personas, p => p.CountryCode == "RO");
         Assert.Contains(personas, p => p.CountryCode == "UA");
         Assert.Contains(personas, p => p.CountryCode == "CN");
+        Assert.Contains(personas, p => p.CountryCode == "CN-EN");
     }
 
     [Fact]
