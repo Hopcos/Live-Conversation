@@ -333,6 +333,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             renderUserBubble(userText.trim());
         } else {
             showNotification('No speech recognized by Whisper. Please try speaking again.', 'warning');
+            state.isAiThinking = false;
+            speechRecognizer.setBlocked(false);
+            if (state.mode === 'hands-free' && !state.handsFreePaused) {
+                speechRecognizer.start();
+            }
+            updateMicUi();
+            updateVisualizerState();
         }
     });
 
@@ -817,7 +824,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         } else {
             micBtn.className = 'w-16 h-16 rounded-full bg-indigo-600 hover:bg-indigo-500 flex items-center justify-center shadow-lg shadow-indigo-600/40 transition-all transform hover:scale-105 cursor-pointer';
             micStatusText.textContent = state.mode === 'hands-free' 
-                ? (state.handsFreePaused ? i18n.t('mic_status_hands_free_idle') : i18n.t('mic_status_listening'))
+                ? i18n.t('mic_status_hands_free_idle')
                 : i18n.t('mic_status_push_idle');
             micStatusText.className = 'text-xs text-slate-400';
         }
@@ -1055,6 +1062,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('mode-hands-free').addEventListener('click', () => {
         state.mode = 'hands-free';
         state.handsFreePaused = false;
+        speechRecognizer.setHandsFreePaused(false);
         speechRecognizer.setMode('hands-free');
         document.getElementById('mode-hands-free').classList.add('bg-indigo-600', 'text-white');
         document.getElementById('mode-hands-free').classList.remove('text-slate-400');
@@ -1071,6 +1079,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     document.getElementById('mode-push-to-talk').addEventListener('click', () => {
         state.mode = 'push-to-talk';
+        state.handsFreePaused = true;
+        speechRecognizer.setHandsFreePaused(true);
         speechRecognizer.setMode('push-to-talk');
         speechRecognizer.stop();
         document.getElementById('mode-push-to-talk').classList.add('bg-indigo-600', 'text-white');
@@ -1087,10 +1097,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (state.isListening) {
                 // User explicitly clicked to pause hands-free listening
                 state.handsFreePaused = true;
+                speechRecognizer.setHandsFreePaused(true);
                 speechRecognizer.stop();
             } else {
                 // User explicitly clicked to unpause/start hands-free listening
                 state.handsFreePaused = false;
+                speechRecognizer.setHandsFreePaused(false);
                 if (state.isAiSpeaking || state.isAiThinking) {
                     clearTimeout(state.cooldownTimer);
                     audioPlayer.stop();
@@ -1168,6 +1180,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 state.isAiSpeaking = false;
                 state.isAiThinking = false;
             }
+            if (state.mode === 'hands-free') {
+                state.handsFreePaused = false;
+                speechRecognizer.setHandsFreePaused(false);
+            }
             speechRecognizer.setBlocked(false);
             speechRecognizer.start();
         }
@@ -1192,6 +1208,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         speechRecognizer.setBlocked(false);
         if (state.mode === 'hands-free') {
             state.handsFreePaused = false;
+            speechRecognizer.setHandsFreePaused(false);
             speechRecognizer.start();
         }
         updateMicUi();

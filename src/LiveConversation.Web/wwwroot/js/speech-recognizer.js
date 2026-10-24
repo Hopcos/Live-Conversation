@@ -12,9 +12,12 @@ class SpeechRecognizer {
         this.isListening = false;
         this.isBlocked = false;
         this.mode = 'hands-free'; // 'hands-free' or 'push-to-talk'
+        this.handsFreePaused = false;
         this.silenceTimer = null;
         this.silenceDelayMs = 900; // Time of silence before auto-submitting in WebSpeech
         this.accumulatedTranscript = '';
+        this.interimTranscript = '';
+        this._isFinalizing = false;
         this.forcedLanguage = null;
 
         // Whisper AudioContext & PCM WAV state
@@ -44,6 +47,10 @@ class SpeechRecognizer {
         this.engine = engine === 'Whisper' ? 'Whisper' : 'WebSpeech';
     }
 
+    setHandsFreePaused(paused) {
+        this.handsFreePaused = !!paused;
+    }
+
     _setupWebSpeech() {
         this.recognition.continuous = true;
         this.recognition.interimResults = true;
@@ -51,13 +58,16 @@ class SpeechRecognizer {
 
         this.recognition.onstart = () => {
             this.isListening = true;
+            this._isFinalizing = false;
             this.accumulatedTranscript = '';
+            this.interimTranscript = '';
             if (this.onStateChange) this.onStateChange(true);
         };
 
         this.recognition.onresult = (event) => {
             if (this.isBlocked) {
                 this.accumulatedTranscript = '';
+                this.interimTranscript = '';
                 this._clearSilenceTimer();
                 return;
             }
@@ -77,23 +87,24 @@ class SpeechRecognizer {
             if (finalThisTurn) {
                 this.accumulatedTranscript += finalThisTurn;
             }
+            this.interimTranscript = interim;
 
-            const currentDisplay = (this.accumulatedTranscript + interim).trim();
+            const currentDisplay = (this.accumulatedTranscript + (this.interimTranscript ? ' ' + this.interimTranscript : '')).trim();
             if (this.onInterimResult && currentDisplay) {
                 this.onInterimResult(currentDisplay);
             }
 
-            // In hands-free mode, reset silence timer whenever user speaks
-            if (this.mode === 'hands-free') {
+            // In hands-free mode, reset silence timer whenever user speaks non-empty text
+            if (this.mode === 'hands-free' && currentDisplay) {
                 this._resetSilenceTimer();
             }
         };
 
         this.recognition.onerror = (event) => {
-            console.warn('WebSpeech event error:', event.error);
-            if (event.error === 'no-speech') {
-                return; // User was just quiet, ignore
+            if (event.error === 'no-speech' || event.error === 'aborted') {
+                return; // User was quiet or session aborted, ignore
             }
+            console.warn('WebSpeech event error:', event.error);
             if (this.onError) {
                 this.onError(event.error);
             }
@@ -101,22 +112,45 @@ class SpeechRecognizer {
 
         this.recognition.onend = () => {
             this.isListening = false;
-            if (this.onStateChange) this.onStateChange(false);
             this._clearSilenceTimer();
 
             // Discard any speech recognized if blocked (e.g. AI turn or interrupt)
             if (this.isBlocked) {
                 this.accumulatedTranscript = '';
+                this.interimTranscript = '';
+                this._isFinalizing = false;
+                if (this.onStateChange) this.onStateChange(false);
                 return;
             }
 
-            // Submit what was accumulated if any
-            if (this.accumulatedTranscript.trim()) {
-                const text = this.accumulatedTranscript.trim();
+            // If not already finalized, submit whatever was accumulated
+            if (!this._isFinalizing) {
+                const textToSubmit = (this.accumulatedTranscript + (this.interimTranscript ? ' ' + this.interimTranscript : '')).trim();
                 this.accumulatedTranscript = '';
-                if (this.onFinalResult && !this.isBlocked) {
-                    this.onFinalResult(text);
+                this.interimTranscript = '';
+
+                if (textToSubmit) {
+                    this._isFinalizing = true;
+                    if (this.onStateChange) this.onStateChange(false);
+                    if (this.onFinalResult && !this.isBlocked) {
+                        this.onFinalResult(textToSubmit);
+                    }
+                    return;
                 }
+            }
+
+            this.accumulatedTranscript = '';
+            this.interimTranscript = '';
+            this._isFinalizing = false;
+            if (this.onStateChange) this.onStateChange(false);
+
+            // Auto-restart hands-free listening if browser ended session on silence/timeout
+            if (this.mode === 'hands-free' && !this.isBlocked && !this.handsFreePaused) {
+                setTimeout(() => {
+                    if (this.mode === 'hands-free' && !this.isBlocked && !this.handsFreePaused && !this.isListening) {
+                        this.start();
+                    }
+                }, 100);
             }
         };
     }
@@ -156,6 +190,8 @@ class SpeechRecognizer {
         this.isBlocked = !!blocked;
         if (this.isBlocked) {
             this.accumulatedTranscript = '';
+            this.interimTranscript = '';
+            this._isFinalizing = false;
             this.pcmBuffers = [];
             this._clearSilenceTimer();
             this._stopVad();
@@ -196,18 +232,21 @@ class SpeechRecognizer {
         }
 
         this.accumulatedTranscript = '';
+        this.interimTranscript = '';
+        this._isFinalizing = false;
+
         try {
             this.recognition.start();
         } catch (e) {
             if (e.name === 'InvalidStateError') {
                 try {
                     this.recognition.abort();
-                    setTimeout(() => {
-                        if (!this.isBlocked && !this.isListening) {
-                            try { this.recognition.start(); } catch (err) {}
-                        }
-                    }, 50);
                 } catch (abortErr) {}
+                setTimeout(() => {
+                    if (!this.isBlocked && !this.isListening) {
+                        try { this.recognition.start(); } catch (err) {}
+                    }
+                }, 100);
             } else {
                 console.warn('Recognition start exception:', e);
             }
@@ -217,7 +256,11 @@ class SpeechRecognizer {
     _stopWebSpeech(abort = false) {
         if (!this.isWebSpeechSupported || !this.isListening) return;
         this._clearSilenceTimer();
-        this.accumulatedTranscript = '';
+        if (abort) {
+            this.accumulatedTranscript = '';
+            this.interimTranscript = '';
+            this._isFinalizing = false;
+        }
         try {
             if (abort && typeof this.recognition.abort === 'function') {
                 this.recognition.abort();
@@ -232,10 +275,29 @@ class SpeechRecognizer {
     _resetSilenceTimer() {
         this._clearSilenceTimer();
         this.silenceTimer = setTimeout(() => {
-            if (this.isListening) {
-                this.stop();
+            if (this.isListening && !this.isBlocked) {
+                this._finalizeSpeech();
             }
         }, this.silenceDelayMs);
+    }
+
+    _finalizeSpeech() {
+        this._clearSilenceTimer();
+        if (this._isFinalizing) return;
+        this._isFinalizing = true;
+
+        const textToSubmit = (this.accumulatedTranscript + (this.interimTranscript ? ' ' + this.interimTranscript : '')).trim();
+        this.accumulatedTranscript = '';
+        this.interimTranscript = '';
+
+        if (textToSubmit && !this.isBlocked) {
+            this.stop(false);
+            if (this.onFinalResult && !this.isBlocked) {
+                this.onFinalResult(textToSubmit);
+            }
+        } else {
+            this._isFinalizing = false;
+        }
     }
 
     _clearSilenceTimer() {
@@ -344,6 +406,13 @@ class SpeechRecognizer {
         if (totalLength < 3200) {
             // Less than ~0.15s: ignore accidental micro-clicks
             this.pcmBuffers = [];
+            if (this.mode === 'hands-free' && !this.isBlocked && !this.handsFreePaused) {
+                setTimeout(() => {
+                    if (this.mode === 'hands-free' && !this.isBlocked && !this.handsFreePaused && !this.isListening) {
+                        this.start();
+                    }
+                }, 100);
+            }
             return;
         }
 
